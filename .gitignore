@@ -1,0 +1,23 @@
+# Node.js
+node_modules/
+
+# Dependency directories
+package-lock.json
+
+# dotenv environment variable files
+.env
+
+# Generated files
+dist/
+build/
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# Logs
+logs/
+
+# OS generated files
+.DS_Store
+Thumbs.db
