@@ -3,6 +3,7 @@ const app = express();
 const cors = require('cors');
 app.use(express.json());
 app.use(cors());
+require('dotenv').config(); 
 
 //========= Static Files ====================
 app.use('/assets', express.static('assets'));
@@ -38,6 +39,6 @@ app.get('/', (req, res)=>{
 
 
 
-app.listen(8000, ()=>{
-    console.log('server running on port 8000')
+app.listen(process.env.PORT, ()=>{
+    console.log(process.env.DB_HOST)
 });
