@@ -1,92 +1,144 @@
-const {Sequelize, Rdv_type} = require('../models');
-const {Op} = require('sequelize');
+const db = require('../config/config');
 
 exports.allTypes = async (req, res) => {
-    const types = await Rdv_type.findAll();
-    res.json({
-        success: true,
-        data: types,
-        status: 200
-    });
-}
+    try {
+        const [types] = await db.promise().execute(
+            'SELECT * FROM rdv_motifs'
+        );
 
-
-exports.CreateType = async (req,res)=>{
-    const {name} = req.body;
-    if (name) {
-        const new_Type = await Rdv_type.create({
-            name : name
-        })
         res.json({
-            message: "Type created ... ",
             success: true,
+            data: types,
             status: 200
-        })
-    }else{
+        });
+    } catch (error) {
         res.json({
-            message: "All field are required ...",
             success: false,
-            status: 200
-        })
+            errors: error,
+            status: 500
+        });
     }
-} 
+};
 
+exports.CreateType = async (req, res) => {
+    const { name } = req.body;
 
-exports.UpdateType = async (req, res)=>{
-      const {id}= req.params;
-    const {name}= req.body
-    if (Number(id) && name) {
-        const Type = await Rdv_type.findByPk(id);
-        if (Type) {
-            await Type.update({
-                name: name
-            })
+    if (name) {
+        try {
+            await db.promise().execute(
+                'INSERT INTO rdv_motifs (name) VALUES (?)',
+                [name]
+            );
+
             res.json({
-                message: " Type Updated ",
+                message: 'Type created',
                 success: true,
                 status: 200
-            })
-        } else{
+            });
+        } catch (error) {
+            console.log(error);
             res.json({
-                message: "No Type finded ",
+                message: 'Error creating Type',
                 success: false,
-                status: 400
-            })
-        }  
-    }else{
+                status: 500
+            });
+        }
+    } else {
         res.json({
-            message: "Invalid id  or empty field",
+            message: 'All fields are required',
             success: false,
             status: 400
-        })
+        });
     }
-}
+};
 
-exports.deleteType = async (req, res)=>{
-    const {id} = req.params;
-    
-    if (Number(id)) {
-        const Type = await Rdv_type.findByPk(id);
-        if (Type) {
-            const deleted_Type = await Type.destroy();
+exports.UpdateType = async (req, res) => {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (Number(id) && name) {
+        try {
+            const [Type] = await db.promise().execute(
+                'SELECT * FROM rdv_motifs WHERE id = ?',
+                [id]
+            );
+
+            if (Type.length > 0) {
+                await db.promise().execute(
+                    'UPDATE rdv_motifs SET name = ? WHERE id = ?',
+                    [name, id]
+                );
+
+                res.json({
+                    message: 'Type updated',
+                    success: true,
+                    status: 200
+                });
+            } else {
+                res.json({
+                    message: 'Type not found',
+                    success: false,
+                    status: 400
+                });
+            }
+        } catch (error) {
+            console.log(error);
             res.json({
-                message: "Type deleted ",
-                success: true,
-                status: 200
-            })
-        } else{
-            res.json({
-                message: "No Type finded ",
+                message: 'Error updating Type',
                 success: false,
-                status: 200
-            })
-        }  
-    }else{
+                status: 500
+            });
+        }
+    } else {
         res.json({
-            message: "Invalid id  ",
+            message: 'Invalid id or empty field',
             success: false,
-            status: 200
-        })
+            status: 400
+        });
     }
-    
-}
+};
+
+exports.deleteType = async (req, res) => {
+    const { id } = req.params;
+
+    if (Number(id)) {
+        try {
+            const [Type] = await db.promise().execute(
+                'SELECT * FROM rdv_motifs WHERE id = ?',
+                [id]
+            );
+
+            if (Type.length > 0) {
+                await db.promise().execute(
+                    'DELETE FROM rdv_motifs WHERE id = ?',
+                    [id]
+                );
+
+                res.json({
+                    message: 'Type deleted',
+                    success: true,
+                    status: 200
+                });
+            } else {
+                res.json({
+                    message: 'Type not found',
+                    success: false,
+                    status: 400
+                });
+            }
+        } catch (error) {
+            console.log(error);
+            res.json({
+                message: 'Error deleting Type',
+                success: false,
+                status: 500
+            });
+        }
+    } else {
+        res.json({
+            message: 'Invalid id',
+            success: false,
+            status: 400
+        });
+    }
+};

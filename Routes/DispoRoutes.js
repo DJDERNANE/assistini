@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const {ProviderDisponibilties} = require('../Controllers/DisponibilitiesController');
+const {ProviderDisponibilities} = require('../Controllers/DisponibilitiesController');
 
 
 
-router.get('/provider/:id',ProviderDisponibilties);
+router.get('/provider/:id',ProviderDisponibilities);
 
 module.exports = router

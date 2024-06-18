@@ -1,33 +1,44 @@
-var jwt = require('jsonwebtoken');
-const { Sequelize, provider } = require('../models');
+const jwt = require('jsonwebtoken');
+const db = require('../config/config');
 
-exports.accountActivation = async(req, res) => {
+exports.accountActivation = async (req, res) => {
     const { token } = req.params;
-    
+
     if (token) {
         try {
-            const validtoken = jwt.verify(token, 'secret');
-            if (validtoken !== null) {
-                const email = validtoken.email;
-                const findprovider = await provider.findOne({where:{email: email}})
-                if (findprovider === null) {
+            const validToken = jwt.verify(token, 'secret');
+            if (validToken !== null) {
+                const email = validToken.email;
+
+                // Raw SQL query to find a provider by email
+                const [findProviderResult] = await db.promise().execute(
+                    'SELECT * FROM providers WHERE email = ?',
+                    [email]
+                );
+
+                if (!findProviderResult.length) {
                     res.json({
-                        message: 'your validation is expired , try to Signup again ',
+                        message: 'Your validation is expired. Try to sign up again.',
                         status: 400,
                         success: true
                     });
-                }else{
-                    await findprovider.update({isactive: true})
+                } else {
+                    // Raw SQL query to update provider's isactive column
+                    await db.promise().execute(
+                        'UPDATE providers SET isactive = true WHERE email = ?',
+                        [email]
+                    );
+
                     res.json({
                         message: 'Your account is active now. Login.',
                         status: 200,
                         success: true
                     });
                 }
-                
-            }else{
+
+            } else {
                 res.json({
-                    message: 'empty token',
+                    message: 'Empty token',
                     status: 401,
                     success: false
                 });
@@ -40,4 +51,4 @@ exports.accountActivation = async(req, res) => {
             });
         }
     }
-}
+};

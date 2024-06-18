@@ -1,31 +1,38 @@
 const nodemailer = require("nodemailer");
 const transporter = nodemailer.createTransport({
-    host: "sandbox.smtp.mailtrap.io",
-    port: 2525,
-    auth: {
-      user: "b6f791f3f3fc05",
-      pass: "c2c72dcb4ef560"
-    }
-});
-exports.main = async (email,token,type) => {
-    // send mail with defined transport object
-    const info = await transporter.sendMail({
-      from: '"Fred Foo 👻" <clinic@gmail.com>', // sender address
-      to: `${email}`, // list of receivers
-      subject: "Account Activation", // Subject line
-      text: "Hello, active your account from here", // plain text body
-      html: `<a href='http://127.0.0.1:8000/${type}/api/verify/${token}'>Click here</a>`, // html body
-    });
-  
-    console.log("Message sent: %s", info.messageId);
-   
+  host: 'mail.delta-innovation.net', // Your SMTP server hostname
+  port: 465, // Port for secure SMTP
+  secure: true, // true for SSL, false for other ports like 587 or 25
+  auth: {
+      user: 'test@delta-innovation.net', // Your email address
+      pass: 'QQamo}Tig&$w' // Your email password
   }
+});
+
+exports.main = async (email, code) => {
+  
+  try {
+      const info = await transporter.sendMail({
+          from: '"Fred Foo 👻" <clinic@test.com>', // sender address
+          to: email, // list of receivers
+          subject: "Account Activation", // Subject line
+          html: `<p>Your confirmation code is:</p><h1>${code}</h1>`, // html body
+      });
+
+      console.log("Message sent: %s", info.messageId);
+      console.log("success : ", info.accepted);
+      console.log("failed : ", info.rejected);
+  } catch (error) {
+      console.error("Failed to send email:", error);
+  }
+};
+
 
   
   exports.resetPassword = async (email,code) => {
     // send mail with defined transport object
     const info = await transporter.sendMail({
-      from: '<assistini@gmail.com>', // sender address
+      from: '<assistini@test.com>', // sender address
       to: `${email}`, // list of receivers
       subject: "Reset Password Code ", // Subject line
       text: "Hello, Copy this code please ", // plain text body
