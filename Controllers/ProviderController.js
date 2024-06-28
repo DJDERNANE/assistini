@@ -445,39 +445,52 @@ exports.deleteLogo = async (req, res) => {
 
 exports.changeEmail = async (req, res) => {
     const Currentuser = req.user
-    const { email } = req.body;
-    if (email) {
+    const { existingEmail, newEmail } = req.body;
+    if (existingEmail && newEmail) {
         try {
-            const [userEmail] = await db.promise().execute(
+            const [emailExist] = await db.promise().execute(
                 'SELECT * FROM providers WHERE email = ?',
-                [email]
+                [existingEmail]
             );
-            if (userEmail.length != 0) {
+            if (emailExist.length == 0) {
                 res.status(400).json({
-                    message: "This Email  exist",
                     success: false,
+                    message: "this email doesn't exist ",
                     status: 400
                 });
-            } else {
-                let confirmationCode = '';
-                const characters = '0123456789';
-                const charactersLength = characters.length;
-                for (let i = 0; i < 4; i++) {
-                    confirmationCode += characters.charAt(Math.floor(Math.random() * charactersLength));
-                }
-                await db.promise().execute(
-                    'UPDATE providers SET otp_code= ?, email = ?  WHERE id = ?',
-                    [confirmationCode, email, Currentuser.id]
+            }else{
+                const [userEmail] = await db.promise().execute(
+                    'SELECT * FROM providers WHERE email = ?',
+                    [newEmail]
                 );
-
-                await main(email, confirmationCode);
-
-                res.json({
-                    message: "code sent, Check your email ",
-                    success: true,
-                    status: 200,
-                });
+                if (userEmail.length != 0) {
+                    res.status(400).json({
+                        message: "This Email  exist",
+                        success: false,
+                        status: 400
+                    });
+                } else {
+                    let confirmationCode = '';
+                    const characters = '0123456789';
+                    const charactersLength = characters.length;
+                    for (let i = 0; i < 4; i++) {
+                        confirmationCode += characters.charAt(Math.floor(Math.random() * charactersLength));
+                    }
+                    await db.promise().execute(
+                        'UPDATE providers SET otp_code= ?, email = ?, isActive  WHERE id = ?',
+                        [confirmationCode, newEmail,0, Currentuser.id]
+                    );
+    
+                    await main(newEmail, confirmationCode);
+    
+                    res.json({
+                        message: "code sent, Check your email ",
+                        success: true,
+                        status: 200,
+                    });
+                }
             }
+          
         } catch (error) {
             console.log(error);
             res.status(400).json({
