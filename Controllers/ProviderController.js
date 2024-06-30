@@ -280,9 +280,9 @@ exports.Login = async (req, res) => {
 
 exports.updateProvider = async (req, res) => {
     const Currentuser = req.user;
-    const { fullName, phone, cabinName, address, localisation, desc, type, argument_num, id_fascial } = req.body;
+    const { fullName, cabinName, address} = req.body;
 
-    if (fullName && cabinName && phone && address && localisation && desc) {
+    if (fullName && cabinName  && address ) {
         try {
             // Convert type array to JSON string for storage
             //const typeJson = JSON.stringify(type);

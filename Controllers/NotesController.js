@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/config');
 
 exports.addNote = async (req, res) => {
-    const { receivers, content, title } = req.body;
+    const { receivers, content } = req.body;
     const user = req.user;
 
     if (!Array.isArray(receivers)) {
@@ -13,10 +13,10 @@ exports.addNote = async (req, res) => {
         });
     }
     
-    const values = receivers.map(rec => [user.id, rec, content, title]);
+    const values = receivers.map(rec => [user.id, rec, content]);
     
     // // Create a query for multiple insertions
-    const query = 'INSERT INTO notes (sender, receiver, content, title) VALUES ?';
+    const query = 'INSERT INTO notes (sender, receiver, content) VALUES ?';
     
     db.query(query, [values], (err, result) => {
         if (err) {
