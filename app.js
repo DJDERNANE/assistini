@@ -2,6 +2,7 @@ require('dotenv').config();
 const db = require('./config/config');
 const express = require('express');
 const app = express();
+const Pusher = require("pusher");
 
 // socket 
 var server = require('http').createServer(app)
@@ -29,7 +30,25 @@ app.use(cors());
 
 
 
+const pusher = new Pusher({
+    app_id :"1826651",
+    key :"2da70226e27716e3a9a9",
+    secret : "1efff7a9c02294d78aec",
+    cluster : "eu"
+  });
 
+  app.post('/pusher/auth', (req, res) => {
+    const socketId = req.body.socket_id;
+    const channel = req.body.channel_name;
+    const presenceData = {
+      user_id: req.body.user_id,
+      user_info: {
+        name: req.body.name
+      }
+    };
+    const auth = pusher.authenticate(socketId, channel, presenceData);
+    res.send(auth);
+  });
 //++++++++++++++ Routes +++++++++++++++++++++++++++=//
 const UserRoutes = require('./Routes/UserRoutes');
 const CategoryRoutes = require('./Routes/CategoryRoutes');

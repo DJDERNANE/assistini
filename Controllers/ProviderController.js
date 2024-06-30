@@ -299,8 +299,8 @@ exports.updateProvider = async (req, res) => {
             }
 
             await db.promise().execute(
-                'UPDATE providers SET fullName = ?, cabinName = ?, phone = ?, address = ?, localisation = ?, `desc` = ? , type = ?, argument_num = ?, id_fascial = ?, logo = ? WHERE id = ?',
-                [fullName, cabinName, phone, address, localisation, desc, type, argument_num, id_fascial, logoPath, Currentuser.id]
+                'UPDATE providers SET fullName = ?, cabinName = ?, address = ?, logo = ? WHERE id = ?',
+                [fullName, cabinName, address, logoPath, Currentuser.id]
             );
 
             res.json({
