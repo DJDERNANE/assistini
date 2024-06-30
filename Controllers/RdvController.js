@@ -30,7 +30,7 @@ exports.watingList = async (req, res) => {
     try {
         const [rdvs] = await db.promise().execute(
             'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail , u.phone ' +
+            'u.fullName AS userName, u.email AS userEmail  ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.userId = u.id ' +
@@ -58,8 +58,8 @@ exports.watingList = async (req, res) => {
 exports.allConfirmedRdvs = async (req, res) => {
     try {
         const [rdvs] = await db.promise().execute(
-            'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail , u.phone ' +
+            'SELECT r.id,  r.createdAt, ' +
+            'u.fullName AS userName, u.email AS userEmail , u.phone, u.sexe, u.birthday, u.address ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.userId = u.id ' +
