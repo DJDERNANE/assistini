@@ -3,8 +3,7 @@ const db = require('../config/config');
 exports.allRdvs = async (req, res) => {
     try {
         const [rdvs] = await db.promise().execute(
-            'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail , u.phone ' +
+            'SELECT r.id, r.patientName, r.createdAt, r.mode , r.motif, r.date ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.userId = u.id ' +
