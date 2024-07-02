@@ -1,20 +1,41 @@
 const db = require('../config/config');
+const path = require('path');
+const fs = require('fs');
 
 exports.allRdvs = async (req, res) => {
     try {
-        const [rdvs] = await db.promise().execute(
-            'SELECT r.id, r.patientName, r.createdAt, r.mode , r.motif, r.date ' +
+        const [rows] = await db.promise().execute(
+            'SELECT r.id, r.patientName, r.createdAt, r.mode, r.motif, r.date, ' +
+            'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
+            'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.userId = u.id ' +
-            'WHERE r.providerId = ? and r.status = ?',
+            'LEFT JOIN documents d ON r.id = d.rdvId ' +
+            'WHERE r.providerId = ? AND r.status = ? ' +
+            'GROUP BY r.id, r.patientName, r.createdAt, r.mode, r.motif, r.date',
             [req.user.id, 'pending']
         );
-        
+
+        // Process the results to format documents correctly
+        const formattedRdvs = rows.map(rdv => {
+            const documentIds = rdv.documentIds ? rdv.documentIds.split(',') : [];
+            const documentFilePaths = rdv.documentFilePaths ? rdv.documentFilePaths.split(',') : [];
+
+            const documents = documentIds.map((id, index) => ({
+                id: id,
+                path: documentFilePaths[index]
+            }));
+
+            return {
+                ...rdv,
+                documents: documents
+            };
+        });
 
         res.json({
             success: true,
-            data: rdvs,
+            data: formattedRdvs,
             status: 200
         });
     } catch (error) {
@@ -28,21 +49,40 @@ exports.allRdvs = async (req, res) => {
 
 exports.watingList = async (req, res) => {
     try {
-        const [rdvs] = await db.promise().execute(
+        const [rows] = await db.promise().execute(
             'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail  ' +
+            'u.fullName AS userName, u.email AS userEmail, ' +
+            'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
+            'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.userId = u.id ' +
-            'WHERE r.providerId = ? and r.status = ? ' + 
-            'ORDER BY  r.urgency DESC,  r.createdAt DESC ',
+            'LEFT JOIN documents d ON u.id = d.userId ' +
+            'WHERE r.providerId = ? AND r.status = ? ' + 
+            'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email ' +
+            'ORDER BY r.urgency DESC, r.createdAt DESC',
             [req.user.id, 'confirmed']
         );
-        
+
+        // Process the results to format documents correctly
+        const formattedRdvs = rows.map(rdv => {
+            const documentIds = rdv.documentIds ? rdv.documentIds.split(',') : [];
+            const documentFilePaths = rdv.documentFilePaths ? rdv.documentFilePaths.split(',') : [];
+
+            const documents = documentIds.map((id, index) => ({
+                id: id,
+                path: documentFilePaths[index]
+            }));
+
+            return {
+                ...rdv,
+                documents: documents
+            };
+        });
 
         res.json({
             success: true,
-            data: rdvs,
+            data: formattedRdvs,
             status: 200
         });
     } catch (error) {
@@ -53,24 +93,45 @@ exports.watingList = async (req, res) => {
         });
     }
 };
+
 
 
 exports.allConfirmedRdvs = async (req, res) => {
     try {
-        const [rdvs] = await db.promise().execute(
-            'SELECT r.id,  r.createdAt, ' +
-            'u.fullName AS userName, u.email AS userEmail , u.phone, u.sexe, u.birthday, u.address ' +
+        const [rows] = await db.promise().execute(
+            'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
+            'u.fullName AS userName, u.email AS userEmail, ' +
+            'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
+            'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.userId = u.id ' +
-            'WHERE r.providerId = ? and r.status = ? ',
+            'LEFT JOIN documents d ON r.id = d.rdvId ' +
+            'WHERE r.providerId = ? AND r.status = ? ' + 
+            'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email ' +
+            'ORDER BY r.urgency DESC, r.createdAt DESC',
             [req.user.id, 'confirmed']
         );
-        
+
+        // Process the results to format documents correctly
+        const formattedRdvs = rows.map(rdv => {
+            const documentIds = rdv.documentIds ? rdv.documentIds.split(',') : [];
+            const documentFilePaths = rdv.documentFilePaths ? rdv.documentFilePaths.split(',') : [];
+
+            const documents = documentIds.map((id, index) => ({
+                id: id,
+                path: documentFilePaths[index]
+            }));
+
+            return {
+                ...rdv,
+                documents: documents
+            };
+        });
 
         res.json({
             success: true,
-            data: rdvs,
+            data: formattedRdvs,
             status: 200
         });
     } catch (error) {
@@ -81,6 +142,7 @@ exports.allConfirmedRdvs = async (req, res) => {
         });
     }
 };
+
 
 exports.patientAllRdvs = async (req, res) => {
     try {
@@ -119,11 +181,30 @@ exports.CreateRdv = async (req, res) => {
             const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [providerId]);
 
             if (userExist.length > 0 && providerExist.length > 0) {
-                await db.promise().execute(
+                const [result] = await db.promise().execute(
                     'INSERT INTO rdvs (patientName, userId, mode, providerId, specialty_id, motif) VALUES (?, ?, ?, ?, ?, ?)',
                     [patientName, userId, type, providerId, specialtyId, motif]
                 );
 
+                let Paths = [];
+                const documents = req.files && req.files.documents;
+                if (documents) {
+                    // Check if documents is an array (multiple files) or a single file
+                    const files = Array.isArray(documents) ? documents : [documents];
+                   
+                    for (let file of files) {
+                        console.log(file.name)
+                        const uploadPath = path.join(__dirname, '../assets/docs/', `${Date.now()}_${file.name}`);
+                        fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+                        await file.mv(uploadPath);
+                        ImgPath = `docs/${Date.now()}_${file.name}`;
+                        
+                        await db.promise().execute(
+                            'INSERT into  documents ( documents, userId, rdvId) values (? ,? , ?)',
+                            [ImgPath, userId, result.insertId]
+                        );
+                    }
+                }
                 res.json({
                     message: 'Rdv created',
                     success: true,
