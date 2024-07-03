@@ -1,6 +1,6 @@
 const db = require('../config/config');
 
-exports.allServices = async (req, res) => {
+exports.specialtyServices = async (req, res) => {
     const user = req.user;
     const { spcId } = req.params;
     try {
@@ -25,6 +25,32 @@ exports.allServices = async (req, res) => {
     }
 };
 
+exports.allServices = async (req, res) => {
+    const user = req.user;
+    try {
+        const [services] = await db.promise().execute(
+            `SELECT s.*
+            FROM services s
+            JOIN providerspecialties ps ON s.providerSpecialtyId = ps.id
+            WHERE ps.providerId = ?`,
+            [user.id]
+        );
+
+        res.status(200).json({
+            success: true,
+            data: services,
+            status: 200
+        });
+    } catch (error) {
+        console.error('Error fetching services:', error);
+        res.status(500).json({
+            success: false,
+            errors: error,
+            status: 500,
+            message: 'Error fetching services'
+        });
+    }
+};
 exports.createService = async (req, res) => {
     const { specialtyId, nom, price } = req.body;
     const user = req.user;

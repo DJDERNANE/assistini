@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const {createService, allServices} = require('../Controllers/ServicesController');
+const {createService, allServices, specialtyServices} = require('../Controllers/ServicesController');
 
-router.get('/:spcId', allServices);
+router.get('/', allServices);
+router.get('/:spcId', specialtyServices);
 router.post('/', createService);
 
 
