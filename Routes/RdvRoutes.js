@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {CreateRdv,allRdvs, confirmRdv, cancelRdv, deleteRdv, closeRdv, patientAllRdvs, allConfirmedRdvs} = require('../Controllers/RdvController');
+const {CreateRdv,allRdvs, confirmRdv, cancelRdv, deleteRdv, closeRdv, patientAllRdvs, allConfirmedRdvs, pricing} = require('../Controllers/RdvController');
 
 router.get('/', allRdvs);
 router.get('/waitinglist', allConfirmedRdvs);
@@ -10,6 +10,7 @@ router.put('/confirm/:id', confirmRdv);
 router.put('/cancel/:id', cancelRdv);
 router.put('/close/:id', closeRdv);
 router.delete('/:id', deleteRdv);
+router.post('/pricing/:id', pricing);
 
 
 

@@ -10,7 +10,7 @@ exports.allRdvs = async (req, res) => {
             'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
-            'JOIN users u ON r.userId = u.id ' +
+            'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON r.id = d.rdvId ' +
             'WHERE r.providerId = ? AND r.status = ? ' +
             'GROUP BY r.id, r.patientName, r.createdAt, r.mode, r.motif, r.date',
@@ -56,8 +56,8 @@ exports.watingList = async (req, res) => {
             'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
-            'JOIN users u ON r.userId = u.id ' +
-            'LEFT JOIN documents d ON u.id = d.userId ' +
+            'JOIN users u ON r.UserId = u.id ' +
+            'LEFT JOIN documents d ON u.id = d.UserId ' +
             'WHERE r.providerId = ? AND r.status = ? ' + 
             'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email ' +
             'ORDER BY r.urgency DESC, r.createdAt DESC',
@@ -105,7 +105,7 @@ exports.allConfirmedRdvs = async (req, res) => {
             'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
-            'JOIN users u ON r.userId = u.id ' +
+            'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON r.id = d.rdvId ' +
             'WHERE r.providerId = ? AND r.status = ? ' + 
             'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email ' +
@@ -151,7 +151,7 @@ exports.patientAllRdvs = async (req, res) => {
             'u.fullName AS userName, u.email AS userEmail , u.phone ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
-            'JOIN users u ON r.userId = u.id ' +
+            'JOIN users u ON r.UserId = u.id ' +
             'WHERE r.UserId = ?',
             [req.user.id]
         );
@@ -173,17 +173,17 @@ exports.patientAllRdvs = async (req, res) => {
 
 exports.CreateRdv = async (req, res) => {
     const { patientName, type, specialtyId, motif } = req.body;
-    const { userId, providerId } = req.params;
+    const { UserId, providerId } = req.params;
 
-    if (patientName && type && Number(userId) && Number(providerId) && specialtyId && motif) {
+    if (patientName && type && Number(UserId) && Number(providerId) && specialtyId && motif) {
         try {
-            const [userExist] = await db.promise().execute('SELECT * FROM users WHERE id = ?', [userId]);
+            const [userExist] = await db.promise().execute('SELECT * FROM users WHERE id = ?', [UserId]);
             const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [providerId]);
 
             if (userExist.length > 0 && providerExist.length > 0) {
                 const [result] = await db.promise().execute(
-                    'INSERT INTO rdvs (patientName, userId, mode, providerId, specialty_id, motif) VALUES (?, ?, ?, ?, ?, ?)',
-                    [patientName, userId, type, providerId, specialtyId, motif]
+                    'INSERT INTO rdvs (patientName, UserId, mode, providerId, specialty_id, motif) VALUES (?, ?, ?, ?, ?, ?)',
+                    [patientName, UserId, type, providerId, specialtyId, motif]
                 );
 
                 let Paths = [];
@@ -200,8 +200,8 @@ exports.CreateRdv = async (req, res) => {
                         ImgPath = `docs/${Date.now()}_${file.name}`;
                         
                         await db.promise().execute(
-                            'INSERT into  documents ( documents, userId, rdvId) values (? ,? , ?)',
-                            [ImgPath, userId, result.insertId]
+                            'INSERT into  documents ( documents, UserId, rdvId) values (? ,? , ?)',
+                            [ImgPath, UserId, result.insertId]
                         );
                     }
                 }
@@ -389,5 +389,34 @@ exports.deleteRdv = async (req, res) => {
         });
     }
 };
+
+exports.pricing = async(req, res) => {
+    const {services} = req.body
+    const { id } = req.params;
+    let total = 0
+    services.forEach(service => {
+        total += service 
+    });
+
+    try {
+        await db.promise().execute('INSERT into pricing (total, rdv_id) values (? ,?)', [total, id]);
+
+        res.json({
+            success: true,
+            status: 200
+        });
+    
+    } catch (error) {
+        console.log(error);
+        res.json({
+            message: 'Error deleting Rdv',
+            success: false,
+            status: 500
+        });
+    }
+
+}
+
+
 
 
