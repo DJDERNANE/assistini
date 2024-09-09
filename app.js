@@ -61,7 +61,8 @@ const DispoRoutes = require('./Routes/DispoRoutes');
 const RdvRoutes = require('./Routes/RdvRoutes');
 const NoteRoutes = require('./Routes/NoteRoutes');
 const SubAdminRoutes = require('./Routes/SubAdminRoutes');
-const ServiceRoutes = require('./Routes/ServiceRoutes')
+const ServiceRoutes = require('./Routes/ServiceRoutes');
+const TeamRoutes = require('./Routes/TeamRoutes');
 const isAuth = require('./Midlewares/AuthMidleware');
 
 const { sendMessage, loadMessages } = require('./Controllers/MessageController')
@@ -79,6 +80,7 @@ app.use('/rdv',isAuth, RdvRoutes);
 app.use('/note', isAuth, NoteRoutes);
 app.use('/subadmin', isAuth ,SubAdminRoutes);
 app.use('/services', isAuth ,ServiceRoutes);
+app.use('/teams', isAuth ,TeamRoutes);
 // app.use('/dispo', DispoRoutes);
 
 
