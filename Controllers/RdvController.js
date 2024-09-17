@@ -51,7 +51,7 @@ exports.watingList = async (req, res) => {
     try {
         const [rows] = await db.promise().execute(
             'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail, ' +
+            'u.fullName AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, ' +
             'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
             'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
@@ -100,7 +100,7 @@ exports.allConfirmedRdvs = async (req, res) => {
     try {
         const [rows] = await db.promise().execute(
             'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail, ' +
+            'u.fullName AS userName, u.email AS userEmail,  u.birthday AS userBirthday, u.sexe,' +
             'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
             'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
@@ -173,8 +173,9 @@ exports.patientAllRdvs = async (req, res) => {
 
 exports.CreateRdv = async (req, res) => {
     const { patientName, type, specialtyId, motif } = req.body;
-    const { UserId, providerId } = req.params;
-
+    const {providerId } = req.params;
+    const Currentuser = req.user 
+    const UserId = Currentuser.id
     if (patientName && type && Number(UserId) && Number(providerId) && specialtyId && motif) {
         try {
             const [userExist] = await db.promise().execute('SELECT * FROM users WHERE id = ?', [UserId]);
