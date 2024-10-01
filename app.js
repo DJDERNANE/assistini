@@ -61,6 +61,7 @@ const DispoRoutes = require('./Routes/DispoRoutes');
 const RdvRoutes = require('./Routes/RdvRoutes');
 const NoteRoutes = require('./Routes/NoteRoutes');
 const SubAdminRoutes = require('./Routes/SubAdminRoutes');
+const SuperAdminRoutes = require('./Routes/SuperAdminRoutes');
 const ServiceRoutes = require('./Routes/ServiceRoutes')
 const isAuth = require('./Midlewares/AuthMidleware');
 
@@ -77,7 +78,8 @@ app.use('/provider', ProviderActivationRoute);
 app.use('/rdvtype', RdvTypeRoutes);
 app.use('/rdv',isAuth, RdvRoutes);
 app.use('/note', isAuth, NoteRoutes);
-app.use('/subadmin', isAuth ,SubAdminRoutes);
+app.use('/subadmin' ,SubAdminRoutes);
+app.use('/superadmin' ,SuperAdminRoutes);
 app.use('/services', isAuth ,ServiceRoutes);
 // app.use('/dispo', DispoRoutes);
 
@@ -109,6 +111,6 @@ io.on('connection', (socket) => {
 
 
 // Start the server
-server.listen(process.env.PORT, () => {
-    console.log(`Server running on port ${process.env.PORT}`);
+server.listen(3000, () => {
+    console.log(`Server running on port ${3000}`);
 });

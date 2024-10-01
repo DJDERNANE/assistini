@@ -5,7 +5,6 @@ var jwt = require('jsonwebtoken');
 var { main } = require('../Componenets/MailComponent');
 const fs = require('fs');
 const path = require('path');
-const { Code } = require('typeorm');
 exports.allProviders = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided

@@ -7,19 +7,14 @@ const jwt = require('jsonwebtoken')
 exports.getAll = async (req, res) => {
     const user = req.user
     let admin = null
-    if (user.admin) {
-        admin = user.admin
-    }else{
-        admin = user.id
-    }
     try {
-        const [subAdmins] = await db.promise().execute(
-            'SELECT username, id FROM sub_admins where admin = ? ', [admin]
+        const [admins] = await db.promise().execute(
+            'SELECT username, id FROM super_admins where super = ? ', [false]
         );
 
         res.json({
             success: true,
-            data: subAdmins,
+            data: admins,
             status: 200
         });
     } catch (error) {
@@ -33,18 +28,16 @@ exports.getAll = async (req, res) => {
 
 exports.add = async (req, res) => {
     const { username, password } = req.body;
-    const user = req.user
-
     if (username && password) {
         try {
             bcrypt.hash(password, saltRound, async (err, hash) => {
                 if (!err) {
                     await db.promise().execute(
-                        'INSERT INTO sub_admins (admin, username,password) VALUES (?, ?, ?)',
-                        [user.id, username, hash]
+                        'INSERT INTO super_admins (username,password) VALUES (?, ?)',
+                        [username, hash]
                     );
                     res.json({
-                        message: 'sub admin created',
+                        message: 'admin created',
                         success: true,
                         status: 200
                     });
@@ -60,7 +53,7 @@ exports.add = async (req, res) => {
         } catch (error) {
             console.log(error);
             res.json({
-                message: 'Error creating Type',
+                message: 'Error creating admin',
                 success: false,
                 status: 500
             });
@@ -74,38 +67,37 @@ exports.add = async (req, res) => {
     }
 };
 
-exports.deleteSubAdmin = async (req, res) => {
+exports.deleteAdmin = async (req, res) => {
     const { id } = req.params;
 
     if (Number(id)) {
         try {
-            const subAdmin = await db.promise().execute(
-                'SELECT * FROM sub_admins WHERE id = ?',
+            const Admin = await db.promise().execute(
+                'SELECT * FROM super_admins WHERE id = ?',
                 [id]
             );
 
-            if (subAdmin.length > 0) {
+            if (Admin.length > 0) {
                 await db.promise().execute(
-                    'DELETE FROM sub_admins WHERE id = ?',
+                    'DELETE FROM super_admins WHERE id = ?',
                     [id]
                 );
 
                 res.json({
-                    message: "subAdmin deleted",
+                    message: "Admin deleted",
                     success: true,
                     status: 200
                 });
             } else {
                 res.status(400).json({
-                    message: "subAdmin not found",
+                    message: "Admin not found",
                     success: false,
                     status: 400
                 });
             }
         } catch (error) {
-            console.log(error);
             res.json({
-                message: "Error deleting subAdmin",
+                message: "Error deleting Admin",
                 success: false,
                 status: 500
             });
@@ -125,7 +117,7 @@ exports.Login = async (req, res) => {
     if (username && password) {
         try {
             const [user] = await db.promise().execute(
-                'SELECT * FROM sub_admins WHERE username = ?',
+                'SELECT * FROM super_admins WHERE username = ?',
                 [username]
             );
 
