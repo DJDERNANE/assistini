@@ -227,7 +227,7 @@ exports.SignUp = async (req, res) => {
 
 exports.Login = async (req, res) => {
     const { email, password } = req.body;
-
+    console.log(email, password)
     if (email && password) {
         try {
             const [currentProvider] = await db.promise().execute(
@@ -244,7 +244,7 @@ exports.Login = async (req, res) => {
             } else {
                 bcrypt.compare(password, currentProvider[0].password, (err, result) => {
                     if (result) {
-                        const token = jwt.sign({ email: email, id: currentProvider[0].id }, 'secret', { expiresIn: '24h' });
+                        const token = jwt.sign({ email: email, id: currentProvider[0].id,cabinName : currentProvider[0].cabinName }, 'secret', { expiresIn: '24h' });
                         res.json({
                             message: 'Logged In',
                             success: true,
@@ -280,7 +280,7 @@ exports.Login = async (req, res) => {
 exports.updateProvider = async (req, res) => {
     const Currentuser = req.user;
     const { fullName, cabinName, address} = req.body;
-
+    
     if (fullName && cabinName  && address ) {
         try {
             // Convert type array to JSON string for storage
@@ -541,3 +541,105 @@ exports.changePassword = async (req, res) => {
     }
 };
 
+
+exports.blockProvider = async (req,res) =>{
+    const { id } = req.params;
+    if (id) {
+        try {
+            const [currentProvider] = await db.promise().execute(
+                'SELECT * FROM providers WHERE id = ?',
+                [id]
+            );
+
+            if (currentProvider.length === 0) {
+                res.status(400).json({
+                    message: "This provider doesn't exist",
+                    success: false,
+                    status: 400
+                });
+            } else {
+                await db.promise().execute(
+                    'UPDATE providers SET status= "blocked" WHERE id = ?',
+                    [id]
+                );
+                res.json({
+                    message: "provider blocked  ",
+                    success: true,
+                    status: 200,
+                });
+            }
+        } catch (error) {
+            
+            res.json({
+                message: 'Error retrieving provider',
+                success: false,
+                status: 500
+            });
+        }
+    }
+}
+
+
+exports.activateProvider = async (req,res) =>{
+    const { id } = req.params;
+    if (id) {
+        try {
+            const [currentProvider] = await db.promise().execute(
+                'SELECT * FROM providers WHERE id = ?',
+                [id]
+            );
+
+            if (currentProvider.length === 0) {
+                res.status(400).json({
+                    message: "This provider doesn't exist",
+                    success: false,
+                    status: 400
+                });
+            } else {
+                await db.promise().execute(
+                    'UPDATE providers SET status= "actif" WHERE id = ?',
+                    [id]
+                );
+                res.json({
+                    message: "provider activated  ",
+                    success: true,
+                    status: 200,
+                });
+            }
+        } catch (error) {
+            
+            res.json({
+                message: 'Error retrieving provider',
+                success: false,
+                status: 500
+            });
+        }
+    }
+}
+
+
+exports.providerSpecialties = async (req, res) => {
+    const user = req.user;
+
+    try {
+        // Fetch provider specialties
+        const [specialties] = await db.promise().execute(
+            'SELECT * FROM providerspecialties JOIN specialties ON providerspecialties.SpecialtyId= specialties.id WHERE providerId = ?',
+            [user.id]
+        );
+
+        // Return the result if successful
+        res.json({
+            success: true,
+            data: specialties,
+            status: 200
+        });
+    } catch (error) {
+        // Handle errors
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching provider specialties',
+            error: error.message
+        });
+    }
+};

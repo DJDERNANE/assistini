@@ -13,7 +13,6 @@ const isAuth = async (req, res, next) => {
     try {
         jwt.verify(token, 'secret', (err, decoded) => {
             if (err) return res.status(500).send({ auth: false, message: 'Failed to authenticate token.' });
-    
             // if everything good, save to request for use in other routes
             req.user = decoded;
             next();

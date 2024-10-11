@@ -72,9 +72,10 @@ exports.createService = async (req, res) => {
 
         const spc = rows[0];
 
-        // Insert the service
-        const query = 'INSERT INTO services (nom, price, providerSpecialtyId) VALUES (?, ?, ?)';
-        await db.promise().execute(query, [nom, price, spc.id]);
+        await db.promise().execute(
+            'INSERT INTO services (nom, price, providerSpecialtyId) VALUES (?, ?, ?)',
+            [nom, price, spc.id]
+        );
 
         res.status(200).json({
             success: true,

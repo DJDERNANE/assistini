@@ -49,18 +49,18 @@ exports.SignUp = async (req, res) => {
             [phone]
         );
 
-        // Check if email or phone number already exists in the "providers" table
-        const [existingProviderByEmail] = await db.promise().execute(
-            'SELECT * FROM providers WHERE email = ?',
+        // Check if email or phone number already exists in the "users" table
+        const [existinguserByEmail] = await db.promise().execute(
+            'SELECT * FROM users WHERE email = ?',
             [email]
         );
 
-        const [existingProviderByPhone] = await db.promise().execute(
-            'SELECT * FROM providers WHERE phone = ?',
+        const [existinguserByPhone] = await db.promise().execute(
+            'SELECT * FROM users WHERE phone = ?',
             [phone]
         );
 
-        if (existingUserByEmail.length > 0 || existingProviderByEmail.length > 0) {
+        if (existingUserByEmail.length > 0 || existinguserByEmail.length > 0) {
             return res.status(400).json({
                 message: "Email already exists",
                 success: false,
@@ -68,7 +68,7 @@ exports.SignUp = async (req, res) => {
             });
         }
 
-        if (existingUserByPhone.length > 0 || existingProviderByPhone.length > 0) {
+        if (existingUserByPhone.length > 0 || existinguserByPhone.length > 0) {
             return res.status(400).json({
                 message: "Phone number already exists",
                 success: false,
@@ -464,4 +464,79 @@ exports.me = async(req, res)=>{
   } catch (error) {
     
   }
+}
+
+exports.blockUser = async (req,res) =>{
+    const { id } = req.params;
+    if (id) {
+        try {
+            const [user] = await db.promise().execute(
+                'SELECT * FROM users WHERE id = ?',
+                [id]
+            );
+
+            if (user.length === 0) {
+                res.status(400).json({
+                    message: "This user doesn't exist",
+                    success: false,
+                    status: 400
+                });
+            } else {
+                await db.promise().execute(
+                    'UPDATE users SET status= "blocked" WHERE id = ?',
+                    [id]
+                );
+                res.json({
+                    message: "user blocked  ",
+                    success: true,
+                    status: 200,
+                });
+            }
+        } catch (error) {
+            
+            res.json({
+                message: 'Error retrieving user',
+                success: false,
+                status: 500
+            });
+        }
+    }
+}
+
+
+exports.activateuser = async (req,res) =>{
+    const { id } = req.params;
+    if (id) {
+        try {
+            const [user] = await db.promise().execute(
+                'SELECT * FROM users WHERE id = ?',
+                [id]
+            );
+
+            if (user.length === 0) {
+                res.status(400).json({
+                    message: "This user doesn't exist",
+                    success: false,
+                    status: 400
+                });
+            } else {
+                await db.promise().execute(
+                    'UPDATE users SET status= "actif" WHERE id = ?',
+                    [id]
+                );
+                res.json({
+                    message: "user activated  ",
+                    success: true,
+                    status: 200,
+                });
+            }
+        } catch (error) {
+            
+            res.json({
+                message: 'Error retrieving user',
+                success: false,
+                status: 500
+            });
+        }
+    }
 }

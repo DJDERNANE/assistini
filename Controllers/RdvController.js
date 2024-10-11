@@ -49,19 +49,38 @@ exports.allRdvs = async (req, res) => {
 
 exports.watingList = async (req, res) => {
     try {
+        // Get pagination parameters from the request, with defaults
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = parseInt(req.query.pageSize) || 10;
+        const offset = (page - 1) * pageSize;
+
+        // Fetch the total count of records for pagination purposes
+        const [totalRowsResult] = await db.promise().execute(
+            'SELECT COUNT(DISTINCT r.id) AS totalCount ' +
+            'FROM rdvs r ' +
+            'JOIN providers p ON r.providerId = p.id ' +
+            'JOIN users u ON r.UserId = u.id ' +
+            'LEFT JOIN documents d ON u.id = d.UserId ' +
+            'WHERE r.providerId = ? AND r.status = ?',
+            [req.user.id, 'confirmed']
+        );
+        const totalCount = totalRowsResult[0].totalCount;
+
+        // Fetch paginated results
         const [rows] = await db.promise().execute(
             'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail, ' +
+            'u.fullName AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, ' +
             'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
             'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON u.id = d.UserId ' +
-            'WHERE r.providerId = ? AND r.status = ? ' + 
+            'WHERE r.providerId = ? AND r.status = ? ' +
             'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email ' +
-            'ORDER BY r.urgency DESC, r.createdAt DESC',
-            [req.user.id, 'confirmed']
+            'ORDER BY r.urgency DESC, r.createdAt DESC ' +
+            'LIMIT ? OFFSET ?',
+            [req.user.id, 'confirmed', pageSize, offset]
         );
 
         // Process the results to format documents correctly
@@ -82,7 +101,13 @@ exports.watingList = async (req, res) => {
 
         res.json({
             success: true,
-            data: formattedRdvs,
+            // data: formattedRdvs,
+            meta: {
+                totalRecords,
+                currentPage: page,
+                pageSize: pageSize,
+                totalPages: Math.ceil(totalCount / pageSize),
+            },
             status: 200
         });
     } catch (error) {
@@ -93,34 +118,59 @@ exports.watingList = async (req, res) => {
         });
     }
 };
+
 
 
 
 exports.allConfirmedRdvs = async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = parseInt(req.query.pageSize) || 6; // Ensure pageSize is an integer
+        const offset = (page - 1) * pageSize; // Ensure offset is an integer
+        
+        // Fetch the appointment records
         const [rows] = await db.promise().execute(
-            'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail, ' +
-            'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
-            'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
+            `SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif,
+            u.fullName AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, u.phone, u.address, 
+            GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, 
+            GROUP_CONCAT(d.created_at ORDER BY d.id) AS documentCreatedAts, 
+            GROUP_CONCAT(d.name ORDER BY d.id) AS documentNames, 
+            GROUP_CONCAT(d.documents ORDER BY d.id) AS documentPaths
+            FROM rdvs r 
+            JOIN providers p ON r.providerId = p.id 
+            JOIN users u ON r.UserId = u.id 
+            LEFT JOIN documents d ON r.id = d.rdvId 
+            WHERE r.providerId = ? AND r.status = ? 
+            GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email 
+            ORDER BY r.urgency DESC, r.createdAt DESC 
+            LIMIT ${pageSize} OFFSET ${offset}`, 
+            [req.user.id, 'confirmed'] // Pass dynamic limit and offset
+        );
+        // Fetch the total count of records
+        const [countResult] = await db.promise().execute(
+            'SELECT COUNT(DISTINCT r.id) AS totalCount ' +
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON r.id = d.rdvId ' +
-            'WHERE r.providerId = ? AND r.status = ? ' + 
-            'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email ' +
-            'ORDER BY r.urgency DESC, r.createdAt DESC',
+            'WHERE r.providerId = ? AND r.status = ?',
             [req.user.id, 'confirmed']
         );
+        
+        const totalRecords = countResult[0].totalCount;
 
         // Process the results to format documents correctly
         const formattedRdvs = rows.map(rdv => {
             const documentIds = rdv.documentIds ? rdv.documentIds.split(',') : [];
-            const documentFilePaths = rdv.documentFilePaths ? rdv.documentFilePaths.split(',') : [];
+            const documentNames = rdv.documentNames ? rdv.documentNames.split(',') : [];
+            const documentPaths = rdv.documentPaths ? rdv.documentPaths.split(',') : [];
+            const documentCreatedAts = rdv.documentCreatedAts ? rdv.documentCreatedAts.split(',') : [];
 
             const documents = documentIds.map((id, index) => ({
                 id: id,
-                path: documentFilePaths[index]
+                name: documentNames[index] || '', // Document name
+                path: documentPaths[index] || '', // Document file path
+                createdAt: documentCreatedAts[index] || '' // Creation timestamp
             }));
 
             return {
@@ -128,10 +178,18 @@ exports.allConfirmedRdvs = async (req, res) => {
                 documents: documents
             };
         });
+        
 
+        // Return the response
         res.json({
             success: true,
             data: formattedRdvs,
+            meta: {
+                totalRecords: totalRecords,
+                currentPage: page,
+                pageSize: pageSize,
+                totalPages: Math.ceil(totalRecords / pageSize) // Correct totalPages calculation
+            },
             status: 200
         });
     } catch (error) {
@@ -142,6 +200,7 @@ exports.allConfirmedRdvs = async (req, res) => {
         });
     }
 };
+
 
 
 exports.patientAllRdvs = async (req, res) => {
@@ -173,8 +232,9 @@ exports.patientAllRdvs = async (req, res) => {
 
 exports.CreateRdv = async (req, res) => {
     const { patientName, type, specialtyId, motif } = req.body;
-    const { UserId, providerId } = req.params;
-
+    const {providerId } = req.params;
+    const Currentuser = req.user 
+    const UserId = Currentuser.id
     if (patientName && type && Number(UserId) && Number(providerId) && specialtyId && motif) {
         try {
             const [userExist] = await db.promise().execute('SELECT * FROM users WHERE id = ?', [UserId]);
@@ -200,8 +260,8 @@ exports.CreateRdv = async (req, res) => {
                         ImgPath = `docs/${Date.now()}_${file.name}`;
                         
                         await db.promise().execute(
-                            'INSERT into  documents ( documents, UserId, rdvId) values (? ,? , ?)',
-                            [ImgPath, UserId, result.insertId]
+                            'INSERT into  documents ( documents, rdvId, name) values (? ,? ,?)',
+                            [ImgPath,  result.insertId, file.name]
                         );
                     }
                 }
@@ -228,7 +288,7 @@ exports.CreateRdv = async (req, res) => {
     } else {
         res.json({
             message: 'All fields are required',
-            success: false,
+            success: UserId,
             status: 400
         });
     }

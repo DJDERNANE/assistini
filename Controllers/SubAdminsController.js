@@ -171,3 +171,26 @@ exports.Login = async (req, res) => {
     //     status: 200
     // });
 };
+
+exports.me = async (req, res) => {
+    const Currentuser = req.user
+    try {
+        const [user] = await db.promise().execute(
+            'SELECT * FROM sub_admins WHERE id = ?',
+            [Currentuser.id]
+        );
+        const currentUser= {
+            username: user[0].username,
+            id: user[0].id,
+        }
+        res.json({
+            success: true,
+            data: currentUser
+        })
+    } catch (error) {
+        res.status(500).json({
+            success: true,
+            user: user[0]
+        })
+    }
+}

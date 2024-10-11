@@ -62,7 +62,12 @@ const RdvRoutes = require('./Routes/RdvRoutes');
 const NoteRoutes = require('./Routes/NoteRoutes');
 const SubAdminRoutes = require('./Routes/SubAdminRoutes');
 const SuperAdminRoutes = require('./Routes/SuperAdminRoutes');
+const PartnerRoutes = require('./Routes/partnersRoutes');
+const PartnerClientsRoutes = require('./Routes/partnerClientsRoutes');
 const ServiceRoutes = require('./Routes/ServiceRoutes')
+const TeamRoutes = require('./Routes/TeamRoutes');
+const InvoiceRoutes = require('./Routes/InvoiceRoutes');
+const testRoutes = require('./Routes/test');
 const isAuth = require('./Midlewares/AuthMidleware');
 
 const { sendMessage, loadMessages } = require('./Controllers/MessageController')
@@ -80,7 +85,12 @@ app.use('/rdv',isAuth, RdvRoutes);
 app.use('/note', isAuth, NoteRoutes);
 app.use('/subadmin' ,SubAdminRoutes);
 app.use('/superadmin' ,SuperAdminRoutes);
+app.use('/partner' ,PartnerRoutes);
+app.use('/partnerclients' ,PartnerClientsRoutes);
 app.use('/services', isAuth ,ServiceRoutes);
+app.use('/teams', isAuth ,TeamRoutes);
+app.use('/invoice', isAuth ,InvoiceRoutes);
+app.use('/test' ,testRoutes);
 // app.use('/dispo', DispoRoutes);
 
 

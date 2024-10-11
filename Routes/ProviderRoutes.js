@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const isAuth = require('../Midlewares/AuthMidleware')
-const {changeEmail, SignUp, Login, allProviders, showProvider, updateProvider, searchProvider, confirmOtpCode, me, deleteLogo, changePassword} = require('../Controllers/ProviderController');
+const {changeEmail, SignUp, Login, allProviders, showProvider, updateProvider, searchProvider, confirmOtpCode, me, deleteLogo, changePassword, blockProvider, activateProvider, providerSpecialties} = require('../Controllers/ProviderController');
 
 router.get('/',  allProviders);
 router.get('/me',isAuth,  me);
@@ -14,4 +14,9 @@ router.get('/providersearch', searchProvider);
 router.post('/confirmOtpCode',confirmOtpCode);
 router.post('/changeemail', isAuth, changeEmail);
 router.post('/changepassword', isAuth, changePassword);
+router.get('/specialties', isAuth, providerSpecialties);
+
+router.put('/block/:id',  blockProvider);
+router.put('/activate/:id',  activateProvider);
+
 module.exports = router

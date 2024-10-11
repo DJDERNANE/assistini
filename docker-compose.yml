@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  express:
+    build:
+      context: . # Path to your Express app's Dockerfile
+    container_name: express_app
+    ports:
+      - "3000:3000"  # Expose Express on port 3000
+    depends_on:
+      - database  # Ensure Express starts after MySQL
+    volumes:
+      - .:/usr/src/app  # Bind mount the current directory to the container
+      - /usr/src/app/node_modules  # Ignore the node_modules folder (use container's)
+
+  database: 
+    image: mysql:latest
+    environment: 
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: assistini
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    volumes:
+      - mysql_data:/var/lib/mysql  # Persist MySQL data
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    depends_on:
+      - database  # Ensure phpMyAdmin starts after MySQL
+    environment:
+      - PMA_HOST=database  # This points to your MySQL service
+      - PMA_USER=user
+      - PMA_PASSWORD=password
+    ports:
+      - "8080:80"  # Expose phpMyAdmin on port 8080
+volumes:
+  mysql_data:
