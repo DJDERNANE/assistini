@@ -92,3 +92,40 @@ exports.createService = async (req, res) => {
         });
     }
 };
+
+exports.deleteService = async (req, res) => {
+    const { id } = req.params;
+
+    if (Number(id)) {
+        try {
+            const [result] = await db.promise().execute('DELETE FROM services WHERE id = ?', [id]);
+
+            if (result.affectedRows > 0) {
+                res.json({
+                    message: "Service deleted",
+                    success: true,
+                    status: 200
+                });
+            } else {
+                res.json({
+                    message: "No Service found",
+                    success: false,
+                    status: 400
+                });
+            }
+        } catch (error) {
+            res.json({
+                message: "Error deleting Service",
+                success: false,
+                errors: error,
+                status: 500
+            });
+        }
+    } else {
+        res.json({
+            message: "Invalid id",
+            success: false,
+            status: 400
+        });
+    }
+};

@@ -288,11 +288,12 @@ exports.getInvoiceById = async (req, res) => {
     const id = req.params.id; // Get the invoice ID from the request parameters
 
     try {
-        // Fetch the invoice along with patient, provider, and service details
+        // Fetch the invoice along with patient, provider, service details, rdv createdAt, and invoice created_at
         const [invoice] = await db.promise().execute(
             `SELECT 
                 i.id AS invoice_id, 
                 i.total_price, 
+                i.created_at AS invoice_created_at,  -- Include invoice creation date
                 u.fullName AS patient, 
                 p.fullName AS provider, 
                 p.logo AS provider_logo, 
@@ -301,7 +302,9 @@ exports.getInvoiceById = async (req, res) => {
                 pp.total AS partner_paid_price,
                 up.total AS user_paid_price,
                 pp.pdf_path AS partner_pdf_path,
-                up.pdf_path AS user_pdf_path
+                up.pdf_path AS user_pdf_path,
+                r.id AS rdv_id,
+                r.createdAt AS rdv_created_at  -- Include rdv creation date
             FROM 
                 invoices i
             LEFT JOIN 
@@ -317,7 +320,7 @@ exports.getInvoiceById = async (req, res) => {
             LEFT JOIN 
                 patient_payment up ON i.id = up.invoice_id
             WHERE 
-                i.id = ? `, 
+                i.id = ?`,
             [id]
         );
 
@@ -339,7 +342,29 @@ exports.getInvoiceById = async (req, res) => {
         const partnerPaid = invoice[0].partner_paid_price;
         const userPaid = invoice[0].user_paid_price;
 
-        // Structure the response for the patient and partner
+        // Fetch the related rapports based on the rdv_id
+        const [rapports] = await db.promise().execute(
+            `SELECT 
+                rp.*, 
+                rd.createdAt, 
+                pro.fullName AS provider_name, 
+                pro.email AS provider_email, 
+                users.fullName AS user_name, 
+                users.email AS user_email
+            FROM 
+                rapports rp
+            JOIN 
+                rdvs rd ON rp.rdvId = rd.id
+            JOIN 
+                providers pro ON rd.providerId = pro.id
+            JOIN 
+                users ON rd.userId = users.id
+            WHERE 
+                rp.rdvId = ?`,
+            [invoice[0].rdv_id]
+        );
+
+        // Structure the response for the patient, provider, rapports, and add rdv_created_at and invoice_created_at
         const invoiceData = {
             invoice_id: invoice[0].invoice_id,
             total_price: invoice[0].total_price,
@@ -362,7 +387,10 @@ exports.getInvoiceById = async (req, res) => {
                     description: 'Amount paid by the partner',
                     path: invoice[0].partner_pdf_path
                 }
-            }
+            },
+            rapports,  // Include fetched rapports
+            invoice_created_at: invoice[0].invoice_created_at,  // Include invoice created_at
+            rdv_created_at: invoice[0].rdv_created_at           // Include rdv createdAt
         };
 
         res.json({
@@ -377,7 +405,8 @@ exports.getInvoiceById = async (req, res) => {
             status: 500
         });
     }
-};  
+};
+
 
 // const generateInvoicePDF = async (invoiceData, recipient, id) => {
 //     const templatePath = path.join(__dirname, 'invoiceTemplate.ejs');

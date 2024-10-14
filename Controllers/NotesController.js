@@ -68,7 +68,7 @@ exports.addTeamNote = async (req, res) => {
 
     try {
         await db.promise().execute(
-            'INSERT INTO team_notes (sender, team, content) VALUES (?, ?, ?)', 
+            'INSERT INTO team_notes (sender, team, content) VALUES (?, ?, ?)',
             [user.id, team, content]
         );
         res.json({
@@ -84,7 +84,7 @@ exports.addTeamNote = async (req, res) => {
             status: 500
         });
     }
-    
+
 };
 
 
@@ -183,12 +183,22 @@ exports.getTeamNotes = async (req, res) => {
 
     // Query to get the notes with pagination
     const getNotesQuery = `
-        SELECT sender, receiver, COUNT(*) as note_count
-        FROM team_notes
-        WHERE admin = ?
-        GROUP BY sender, receiver
-        LIMIT ? OFFSET ?
-    `;
+    SELECT 
+        sa.username AS sender, 
+        rn.username AS receiver, 
+        COUNT(*) AS note_count
+    FROM 
+        team_notes tn
+    JOIN 
+        sub_admins sa ON tn.sender = sa.id
+    JOIN 
+        sub_admins rn ON tn.receiver = rn.id
+    WHERE 
+        tn.admin = ?
+    GROUP BY 
+        sa.username, rn.username
+    LIMIT ? OFFSET ?
+`;
 
     // Query to count the total number of notes where admin = user.id
     const countQuery = `
