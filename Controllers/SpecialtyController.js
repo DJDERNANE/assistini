@@ -45,7 +45,7 @@ exports.searchSpecialty = async (req, res) => {
 };
 
 exports.CreateSpecialty = async (req, res) => {
-    const { name, catId } = req.body;
+    const { name, catId, description } = req.body;
     
     if (name && catId) {
         try {
@@ -56,8 +56,8 @@ exports.CreateSpecialty = async (req, res) => {
 
             if (categoryExist.length > 0) {
                 await db.promise().execute(
-                    'INSERT INTO specialties (name, categoryId) VALUES (?, ?)',
-                    [name, catId]
+                    'INSERT INTO specialties (name, description, categoryId) VALUES (?, ?, ?)',
+                    [name, description,catId]
                 );
 
                 res.json({

@@ -52,7 +52,7 @@ exports.allServices = async (req, res) => {
     }
 };
 exports.createService = async (req, res) => {
-    const { specialtyId, nom, price } = req.body;
+    const { specialtyId, nom, price, description } = req.body;
     const user = req.user;
     try {
         // Select the providerSpecialty
@@ -73,8 +73,8 @@ exports.createService = async (req, res) => {
         const spc = rows[0];
 
         await db.promise().execute(
-            'INSERT INTO services (nom, price, providerSpecialtyId) VALUES (?, ?, ?)',
-            [nom, price, spc.id]
+            'INSERT INTO services (nom, description, price, providerSpecialtyId) VALUES (?, ?, ? ,?)',
+            [nom, description, price, spc.id]
         );
 
         res.status(200).json({
