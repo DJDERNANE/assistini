@@ -3,7 +3,7 @@ const router = express.Router();
 const isAuth = require('../Midlewares/AuthMidleware')
 const {changeEmail, SignUp, Login, allProviders, showProvider, updateProvider, searchProvider, confirmOtpCode, me, deleteLogo, changePassword, blockProvider, activateProvider, providerSpecialties} = require('../Controllers/ProviderController');
 
-router.get('/',  allProviders);
+router.get('/', isAuth, allProviders);
 router.get('/me',isAuth,  me);
 router.get('/provider/:id',  showProvider);
 router.put('/provider',isAuth,   updateProvider);

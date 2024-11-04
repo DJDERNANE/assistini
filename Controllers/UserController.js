@@ -17,7 +17,7 @@ const transporter = nodemailer.createTransport({
 exports.allUsers = async (req, res) => {
     try {
         const [users] = await db.promise().execute(
-            'SELECT id,fullName,birthday,email,phone,codePostal, sexe,SSNum FROM users'
+            'SELECT id,nom,prenom,birthday,email,phone,codePostal, sexe,SSNum FROM users'
         );
 
         res.json({
@@ -36,8 +36,9 @@ exports.allUsers = async (req, res) => {
 };
 
 exports.SignUp = async (req, res) => {
-    const { fullName, birthday, email, password, phone, codePostal, sexe, SSNum } = req.body;
-    if (fullName && birthday && email && password && phone && sexe) {
+    const { nom, prenom, birthday, email, password, phone, codePostal, sexe, SSNum, location } = req.body;
+    const logoFile = req.files ? req.files.logo : sexe == 'male' ? 'homme.jpeg' : 'femme.jpeg';
+    if (nom && prenom && birthday && email && password && phone && sexe) {
         // Check if email or phone number already exists in the "users" table
         const [existingUserByEmail] = await db.promise().execute(
             'SELECT * FROM users WHERE email = ?',
@@ -86,17 +87,17 @@ exports.SignUp = async (req, res) => {
                     }
 
                      // send mail verification link
-                    const info = await transporter.sendMail({
-                          from: '"Assistini" <test@delta-innovation.net>', // sender address
-                          to: email, // list of receivers
-                          subject: "Account Activation", // Subject line
-                          html: `<p>Your confirmation code is:</p><h1>${confirmationCode}</h1>`, // html body
-                      });
+                    // const info = await transporter.sendMail({
+                    //       from: '"Assistini" <test@delta-innovation.net>', // sender address
+                    //       to: email, // list of receivers
+                    //       subject: "Account Activation", // Subject line
+                    //       html: `<p>Your confirmation code is:</p><h1>${confirmationCode}</h1>`, // html body
+                    //   });
                 
 
                     const [newUser] = await db.promise().execute(
-                        'INSERT INTO users (fullName, birthday, email, password, phone, codePostal, sexe, SSNum, otp_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        [fullName, birthday, email, hash, phone, codePostal, sexe, SSNum, confirmationCode]
+                        'INSERT INTO users (nom, prenom, birthday, email, password, phone, codePostal, sexe, SSNum, otp_code, location, logo) VALUES (? , ? ,?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [nom, prenom, birthday, email, hash, phone, codePostal, sexe, SSNum, confirmationCode, location, logoFile]
                     );
 
 
@@ -159,7 +160,13 @@ exports.Login = async (req, res) => {
                             message: "Logged In",
                             success: true,
                             status: 200,
-                            token: token
+                            token: token,
+                            info: {
+                                id: user[0].id,
+                                fullname: user[0].nom + ' ' + user[0].prenom,
+                                email: user[0].email,
+                                logo: user[0].logo
+                            },
                         });
                     } else {
                         res.status(400).json({
@@ -186,7 +193,7 @@ exports.showUser = async (req, res) => {
     if (Number(id)) {
         try {
             const [current_user] = await db.promise().execute(
-                'SELECT id,fullName,birthday,email,phone,codePostal, sexe,SSNum FROM users WHERE id = ?',
+                'SELECT id,nom, prenom,birthday,email,phone,codePostal, sexe,SSNum FROM users WHERE id = ?',
                 [id]
             );
 
@@ -230,12 +237,12 @@ exports.updateUser = async (req, res) => {
             );
 
             if (user.length > 0) {
-                const { fullName, birthday, phone, codePostal, sexe, SSNum } = req.body;
+                const { nom, prenom, birthday, phone, codePostal, sexe, SSNum } = req.body;
 
-                if (fullName && birthday && phone && sexe) {
+                if (nom && prenom && birthday && phone && sexe) {
                     await db.promise().execute(
-                        'UPDATE users SET fullName = ?, birthday = ?, phone = ?, codePostal = ?, sexe = ?, SSNum = ? WHERE id = ?',
-                        [fullName, birthday, phone, codePostal, sexe, SSNum, id]
+                        'UPDATE users SET nom= ?, prenom = ?, birthday = ?, phone = ?, codePostal = ?, sexe = ?, SSNum = ? WHERE id = ?',
+                        [nom, prenom, birthday, phone, codePostal, sexe, SSNum, id]
                     );
 
                     res.json({
@@ -454,7 +461,7 @@ exports.me = async(req, res)=>{
    const Currentuser = req.user 
   try {
     const [user] = await db.promise().execute(
-        'SELECT id,fullName,birthday,email,phone,codePostal, sexe,SSNum FROM users WHERE id = ?',
+        'SELECT id,nom, prenom,birthday,email,phone,codePostal, sexe,SSNum, address FROM users WHERE id = ?',
         [Currentuser.id]
     );
     res.json({
@@ -540,3 +547,118 @@ exports.activateuser = async (req,res) =>{
         }
     }
 }
+
+
+exports.toggleFavorite = async (req, res) => {
+    const user_id = req.user.id;
+    const { provider_id } = req.body;
+  
+    // Check if provider exists
+    const providerQuery = `SELECT * FROM providers WHERE id = ?`;
+  
+    db.query(providerQuery, [provider_id], (err, providerResults) => {
+      if (err) return res.status(500).json({ error: 'Server error' });
+  
+      if (providerResults.length === 0) {
+        return res.status(404).json({ error: 'Provider not found' });
+      }
+  
+      // Check if provider is already in the user's favorites
+      const checkFavoritesQuery = `
+        SELECT * FROM favorite_providers WHERE userId = ? AND providerId = ?
+      `;
+  
+      db.query(checkFavoritesQuery, [user_id, provider_id], (err, favResults) => {
+        if (err) return res.status(500).json({ error: 'Server error' });
+  
+        if (favResults.length > 0) {
+          // Provider is already in favorites, so remove it (toggle off)
+          const deleteQuery = `
+            DELETE FROM favorite_providers WHERE userId = ? AND providerId = ?
+          `;
+  
+          db.query(deleteQuery, [user_id, provider_id], (err, results) => {
+            if (err) return res.status(500).json({ error: 'Server error' });
+  
+            return res.status(200).json({ message: 'Provider removed from favorites' });
+          });
+        } else {
+          // Provider is not in favorites, so add it (toggle on)
+          const insertQuery = `
+            INSERT INTO favorite_providers (userId, providerId) 
+            VALUES (?, ?)
+          `;
+  
+          db.query(insertQuery, [user_id, provider_id], (err, results) => {
+            if (err) return res.status(500).json({ error: 'Server error' });
+  
+            res.status(200).json({ message: 'Provider added to favorites' });
+          });
+        }
+      });
+    });
+  };
+  exports.listFavorites = async (req, res) => {
+    const user_id = req.user.id;
+  
+    const query = `
+      SELECT p.id, p.fullName, p.email, p.cabinName
+      FROM providers p
+      JOIN favorite_providers f ON p.id = f.providerId
+      WHERE f.userId = ?
+    `;
+  
+    db.query(query, [user_id], (err, results) => {
+      if (err) return res.status(500).json({ error: 'Server error' });
+  
+  
+      res.json({data:results});
+    });
+  };
+  
+
+  exports.getUserPartners = async (req, res) => {
+    const {userId} = req.params; // Assuming req.user contains the logged-in user's information
+
+    try {
+        // Query to get partner information for the given user ID
+        const [partners] = await db.promise().execute(
+            `SELECT 
+                p.id AS partnerId, 
+                p.name AS partnerName, 
+                p.percentage AS partnerPercentage 
+             FROM 
+                partnerclients pc
+             JOIN 
+                partners p ON pc.partnerId = p.id
+             WHERE 
+                pc.userId = ?`,
+            [userId]
+        );
+
+        // If no partners found, return an empty array
+        if (partners.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: [],
+                message: 'No partners found for this user',
+                status: 200
+            });
+        }
+
+        // Return the list of partners
+        res.json({
+            success: true,
+            data: partners,
+            status: 200
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.json({
+            success: false,
+            errors: error,
+            status: 500
+        });
+    }
+};

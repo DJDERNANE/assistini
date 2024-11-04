@@ -234,7 +234,7 @@ exports.getall = async (req, res) => {
         let query = `
         SELECT 
             i.*, 
-            u.fullName AS patient, 
+            u.nom AS patient, 
             p.fullName AS provider 
         FROM 
             invoices i
@@ -293,8 +293,9 @@ exports.getInvoiceById = async (req, res) => {
             `SELECT 
                 i.id AS invoice_id, 
                 i.total_price, 
+                i.is_fav,
                 i.created_at AS invoice_created_at,  -- Include invoice creation date
-                u.fullName AS patient, 
+                u.nom AS patient, 
                 p.fullName AS provider, 
                 p.logo AS provider_logo, 
                 details.service AS service_name, 
@@ -349,7 +350,7 @@ exports.getInvoiceById = async (req, res) => {
                 rd.createdAt, 
                 pro.fullName AS provider_name, 
                 pro.email AS provider_email, 
-                users.fullName AS user_name, 
+                users.nom AS user_name, 
                 users.email AS user_email
             FROM 
                 rapports rp
@@ -368,6 +369,7 @@ exports.getInvoiceById = async (req, res) => {
         const invoiceData = {
             invoice_id: invoice[0].invoice_id,
             total_price: invoice[0].total_price,
+            is_fav: invoice[0].is_fav, 
             patient: invoice[0].patient,
             provider: {
                 name: invoice[0].provider,
@@ -520,3 +522,111 @@ const generateInvoicePDF = async (invoiceData, recipient, id) => {
         throw error; // Re-throw the error for further handling
     }
 };
+
+
+exports.toggleFavorite = async (req, res) => {
+    const { invoiceId } = req.params;
+    
+    try {
+        // Check current favorite status
+        const [invoice] = await db.promise().execute(
+            'SELECT is_fav FROM invoices WHERE id = ?',
+            [invoiceId]
+        );
+
+        if (invoice.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Invoice not found',
+                status: 404
+            });
+        }
+
+        // Toggle the favorite status
+        const newIsFav = !invoice[0].is_fav;
+        await db.promise().execute(
+            'UPDATE invoices SET is_fav = ? WHERE id = ?',
+            [newIsFav, invoiceId]
+        );
+
+        res.json({
+            success: true,
+            status: 200,
+            message: `Invoice ${newIsFav ? 'added to' : 'removed from'} favorites`,
+            is_fav: newIsFav
+        });
+    } catch (error) {
+        console.error(error);
+        res.json({
+            success: false,
+            errors: error,
+            status: 500
+        });
+    }
+};
+
+exports.getFav = async (req, res) => {
+    const user = req.user;
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 6;
+    const offset = (page - 1) * pageSize;
+
+    try {
+        // Updated query to include pageSize and offset directly
+        let query = `
+        SELECT 
+            i.*, 
+            u.nom AS patient, 
+            p.fullName AS provider
+        FROM 
+            invoices i
+        JOIN 
+            rdvs r ON i.rdv_id = r.id
+        JOIN 
+            users u ON r.userId = u.id
+        JOIN 
+            providers p ON r.providerId = p.id
+        WHERE 
+            r.providerId = ? AND i.is_fav = 1 
+        LIMIT ${pageSize} OFFSET ${offset}`;
+
+        const queryParams = [user.id];
+
+        // Execute query to get favorite invoices
+        const [favorites] = await db.promise().execute(query, queryParams);
+
+        // Query to count total favorite invoices for pagination
+        const [totalCountResult] = await db.promise().execute(`
+            SELECT COUNT(*) AS totalCount 
+            FROM invoices i
+            JOIN rdvs r ON i.rdv_id = r.id
+            WHERE r.providerId = ? AND i.is_fav = 1`,
+            [user.id]
+        );
+
+        const totalCount = totalCountResult[0].totalCount;
+
+        res.json({
+            success: true,
+            data: favorites,
+            meta: {
+                totalRecords: totalCount,
+                currentPage: page,
+                pageSize: pageSize,
+                totalPages: Math.ceil(totalCount / pageSize)
+            },
+            status: 200
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            errors: error,
+            status: 500
+        });
+    }
+};
+
+
+
+

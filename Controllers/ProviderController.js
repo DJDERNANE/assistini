@@ -6,6 +6,7 @@ var { main } = require('../Componenets/MailComponent');
 const fs = require('fs');
 const path = require('path');
 exports.allProviders = async (req, res) => {
+    const Currentuser = req.user
     try {
         const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
         const pageSize = parseInt(req.query.pageSize) || 10; // Default page size to 10 if not provided
@@ -13,10 +14,14 @@ exports.allProviders = async (req, res) => {
         const endIndex = page * pageSize;
 
         const [providers] = await db.promise().execute(
-            'SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.localisation, p.phone, p.desc, s.name as specialtyName ' +
-            'FROM providers p ' +
-            'LEFT JOIN providerspecialties ps ON p.id = ps.providerId ' +
-            'LEFT JOIN specialties s ON ps.specialtyId = s.id'
+            `SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.location, 
+                    p.phone, p.desc, s.name AS specialtyName,
+                    CASE WHEN f.userId IS NOT NULL THEN true ELSE false END AS isFavorite
+             FROM providers p
+             LEFT JOIN providerspecialties ps ON p.id = ps.providerId
+             LEFT JOIN specialties s ON ps.specialtyId = s.id
+             LEFT JOIN favorite_providers f ON p.id = f.providerId AND f.userId = ?`,
+            [Currentuser.id]
         );
 
         // Slice the providers array based on the indexes
@@ -46,7 +51,7 @@ exports.showProvider = async (req, res) => {
     if (Number(id)) {
         try {
             const [currentProvider] = await db.promise().execute(
-                'SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.localisation, p.phone, p.desc, p.logo, p.services, p.expertises, p.access, p.information   , d.day, d.startTime, d.endTime ' +
+                'SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.location, p.phone, p.desc, p.logo, p.services, p.expertises, p.access, p.information   , d.day, d.startTime, d.endTime ' +
                 'FROM providers p ' +
                 'LEFT JOIN disponibilties d ON p.id = d.providerId ' +
                 'WHERE p.id = ?',
@@ -90,7 +95,7 @@ exports.SignUp = async (req, res) => {
         phone,
         cabinName,
         address,
-        localisation,
+        location,
         desc,
         type,
         argument_num,
@@ -100,7 +105,7 @@ exports.SignUp = async (req, res) => {
 
     const logoFile = req.files ? req.files.logo : null;
 
-    if (!fullName || !cabinName || !email || !password || !phone || !address || !localisation || !desc) {
+    if (!fullName || !cabinName || !email || !password || !phone || !address || !location || !desc) {
         return res.status(400).json({
             message: 'Invalid Field',
             success: false
@@ -189,8 +194,8 @@ exports.SignUp = async (req, res) => {
 
         // Insert the provider into the database
         const [newProvider] = await db.promise().execute(
-            'INSERT INTO providers (fullName, cabinName, email, password, phone, localisation, `desc`, address, otp_code, type, argument_num, id_fascial, logo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [fullName, cabinName, email, hashedPassword, phone, localisation, desc, address, confirmationCode, typeJson, argument_num, id_fascial, logoPath]
+            'INSERT INTO providers (fullName, cabinName, email, password, phone, location, `desc`, address, otp_code, type, argument_num, id_fascial, logo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [fullName, cabinName, email, hashedPassword, phone, location, desc, address, confirmationCode, typeJson, argument_num, id_fascial, logoPath]
         );
 
         if (newProvider.insertId) {
@@ -331,7 +336,7 @@ exports.searchProvider = async (req, res) => {
 
     try {
         const [providers] = await db.promise().execute(
-            'SELECT p.fullName, p.cabinName, p.email, p.address, p.localisation, p.phone, p.desc, s.name as specialtyName ' +
+            'SELECT p.fullName, p.cabinName, p.email, p.address, p.location, p.phone, p.desc, s.name as specialtyName ' +
             'FROM providers p ' +
             'LEFT JOIN providerspecialties ps ON p.id = ps.providerId ' +
             'LEFT JOIN specialties s ON ps.specialtyId = s.id ' +
@@ -412,7 +417,7 @@ exports.me = async (req, res) => {
     const Currentuser = req.user
     try {
         const [user] = await db.promise().execute(
-            'SELECT id,fullName,cabinName,email,phone,address,localisation, type, argument_num, id_fascial, logo FROM providers WHERE id = ?',
+            'SELECT id,fullName,cabinName,email,phone,address,location, type, argument_num, id_fascial, logo FROM providers WHERE id = ?',
             [Currentuser.id]
         );
         console.log(user)

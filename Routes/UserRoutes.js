@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const isAuth = require('../Midlewares/AuthMidleware')
-const {SignUp, Login, allUsers,showUser, updateUser,checkEmail,ResetPassword, confirmEmail, confirmOtpCode,me, blockUser, activateuser} = require('../Controllers/UserController');
+const {SignUp, Login, allUsers,showUser, updateUser,checkEmail,ResetPassword, confirmEmail, confirmOtpCode,me, blockUser, activateuser,
+    toggleFavorite, listFavorites, getUserPartners
+} = require('../Controllers/UserController');
 
 
 router.get('/me',isAuth,me);
@@ -16,4 +18,7 @@ router.get('/user/:id', showUser);
  router.post('/confirmOtpCode',confirmOtpCode);
  router.put('/block/:id',  blockUser);
 router.put('/activate/:id',  activateuser);
+router.post('/togglefav',isAuth,  toggleFavorite);
+router.get('/fav',isAuth,  listFavorites);
+router.get('/partners/:userId',  getUserPartners);
 module.exports  = router;

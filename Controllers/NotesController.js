@@ -176,56 +176,76 @@ exports.addTeamNote = async (req, res) => {
 
 exports.getTeamNotes = async (req, res) => {
     const user = req.user; // Assuming the user object is attached to the request
-    const { page = 1, limit = 10 } = req.query; // Default values: page = 1, limit = 10
+    const { page = 1, limit = 10, search = '' } = req.query; // Default values for pagination, optional search
 
     // Calculate the offset for pagination
     const offset = (page - 1) * limit;
 
-    // Query to get the notes with pagination
-    const getNotesQuery = `
-    SELECT 
-        sa.username AS sender, 
-        rn.username AS receiver, 
-        COUNT(*) AS note_count
-    FROM 
-        team_notes tn
-    JOIN 
-        sub_admins sa ON tn.sender = sa.id
-    JOIN 
-        sub_admins rn ON tn.receiver = rn.id
-    WHERE 
-        tn.admin = ?
-    GROUP BY 
-        sa.username, rn.username
-    LIMIT ? OFFSET ?
-`;
-
-    // Query to count the total number of notes where admin = user.id
-    const countQuery = `
-        SELECT COUNT(*) as total
-        FROM team_notes
-        WHERE admin = ?
+    // Base query for getting notes with pagination
+    let getNotesQuery = `
+        SELECT 
+            sa.username AS sender, 
+            rn.username AS receiver, 
+            COUNT(*) AS note_count
+        FROM 
+            team_notes tn
+        JOIN 
+            sub_admins sa ON tn.sender = sa.id
+        JOIN 
+            sub_admins rn ON tn.receiver = rn.id
+        WHERE 
+            tn.admin = ?
     `;
 
-    // Perform both queries asynchronously
+    // Append search condition if a search term is provided
+    if (search) {
+        getNotesQuery += `
+            AND (sa.username LIKE ? OR rn.username LIKE ?)
+        `;
+    }
+
+    // Complete query by adding grouping and pagination
+    getNotesQuery += `
+        GROUP BY 
+            sa.username, rn.username
+        LIMIT ? OFFSET ?
+    `;
+
+    // Query to count the total number of notes, including the search filter if provided
+    let countQuery = `
+        SELECT COUNT(*) as total
+        FROM team_notes tn
+        JOIN sub_admins sa ON tn.sender = sa.id
+        JOIN sub_admins rn ON tn.receiver = rn.id
+        WHERE tn.admin = ?
+    `;
+
+    if (search) {
+        countQuery += ` AND (sa.username LIKE ? OR rn.username LIKE ?)`;
+    }
+
     try {
-        // Query to get the total count of notes
+        // Execute the count query
         const totalResults = await new Promise((resolve, reject) => {
-            db.query(countQuery, [user.id], (err, results) => {
+            const countParams = search ? [user.id, `%${search}%`, `%${search}%`] : [user.id];
+            db.query(countQuery, countParams, (err, results) => {
                 if (err) return reject(err);
                 resolve(results[0].total); // Extract total from results
             });
         });
 
-        // Query to get the notes with pagination
+        // Execute the paginated query
         const paginatedResults = await new Promise((resolve, reject) => {
-            db.query(getNotesQuery, [user.id, parseInt(limit), parseInt(offset)], (err, results) => {
+            const notesParams = search
+                ? [user.id, `%${search}%`, `%${search}%`, parseInt(limit), parseInt(offset)]
+                : [user.id, parseInt(limit), parseInt(offset)];
+            db.query(getNotesQuery, notesParams, (err, results) => {
                 if (err) return reject(err);
                 resolve(results);
             });
         });
 
-        // Send the response with pagination and total count
+        // Send the response with pagination, total count, and data
         res.status(200).json({
             success: true,
             status: 200,

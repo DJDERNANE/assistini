@@ -69,7 +69,7 @@ exports.watingList = async (req, res) => {
         // Fetch paginated results
         const [rows] = await db.promise().execute(
             'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, ' +
+            'u.nom, u.prenom AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, ' +
             'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
             'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
             'FROM rdvs r ' +
@@ -77,7 +77,7 @@ exports.watingList = async (req, res) => {
             'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON u.id = d.UserId ' +
             'WHERE r.providerId = ? AND r.status = ? ' +
-            'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email ' +
+            'GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.nom, u.prenom, u.email ' +
             'ORDER BY r.urgency DESC, r.createdAt DESC ' +
             'LIMIT ? OFFSET ?',
             [req.user.id, 'confirmed', pageSize, offset]
@@ -131,7 +131,7 @@ exports.allConfirmedRdvs = async (req, res) => {
         // Fetch the appointment records
         const [rows] = await db.promise().execute(
             `SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif,
-            u.fullName AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, u.phone, u.address, 
+            u.nom, u.prenom AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, u.phone, u.address, 
             GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, 
             GROUP_CONCAT(d.created_at ORDER BY d.id) AS documentCreatedAts, 
             GROUP_CONCAT(d.name ORDER BY d.id) AS documentNames, 
@@ -141,7 +141,7 @@ exports.allConfirmedRdvs = async (req, res) => {
             JOIN users u ON r.UserId = u.id 
             LEFT JOIN documents d ON r.id = d.rdvId 
             WHERE r.providerId = ? AND r.status = ? 
-            GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.fullName, u.email 
+            GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.nom, u.prenom, u.email 
             ORDER BY r.urgency DESC, r.createdAt DESC 
             LIMIT ${pageSize} OFFSET ${offset}`, 
             [req.user.id, 'confirmed'] // Pass dynamic limit and offset
@@ -205,17 +205,23 @@ exports.allConfirmedRdvs = async (req, res) => {
 
 exports.patientAllRdvs = async (req, res) => {
     try {
+        const userId = req.user.id; // Current user ID
+
         const [rdvs] = await db.promise().execute(
-            'SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, ' +
-            'u.fullName AS userName, u.email AS userEmail , u.phone ' +
-            'FROM rdvs r ' +
-            'JOIN providers p ON r.providerId = p.id ' +
-            'JOIN users u ON r.UserId = u.id ' +
-            'WHERE r.UserId = ?',
-            [req.user.id]
+            `SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, 
+            u.nom AS userName, u.email AS userEmail, u.phone,
+            CASE 
+                WHEN f.userId IS NOT NULL THEN TRUE
+                ELSE FALSE
+            END AS isFavorite
+            FROM rdvs r 
+            JOIN providers p ON r.providerId = p.id 
+            JOIN users u ON r.UserId = u.id 
+            LEFT JOIN favorite_providers f ON f.providerId = r.providerId AND f.userId = ? 
+            WHERE r.UserId = ?`,
+            [userId, userId] // Using the same userId to check if the provider is a favorite and to fetch the user's appointments
         );
         
-
         res.json({
             success: true,
             data: rdvs,
@@ -229,6 +235,7 @@ exports.patientAllRdvs = async (req, res) => {
         });
     }
 };
+
 
 exports.CreateRdv = async (req, res) => {
     const { patientName, type, specialtyId, motif } = req.body;

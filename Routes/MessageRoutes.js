@@ -1,7 +1,10 @@
-// const express = require('express');
-// const router = express.Router();
-// const {saveMessage} = require('../Controllers/MessageController');
+const express = require('express');
+const router = express.Router();
+const { messages, getAllMyMessages, sendMessage} = require('../Controllers/MessageController');
 
-// router.post('/', saveMessage);
-// router.get('/', (req,res)=>{res.send('ok')});
-// module.exports = router
+
+router.get('/con/:recipient_id',messages);
+router.get('/:role',getAllMyMessages);
+router.post('/:role', sendMessage);
+
+module.exports = router
