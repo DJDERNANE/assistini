@@ -1,9 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const {ProviderDisponibilities} = require('../Controllers/DisponibilitiesController');
+const {ProviderDisponibilities, setProviderAvailability, getdays, updateProviderAvailability} = require('../Controllers/DisponibilitiesController');
+const isAuth = require('../Midlewares/AuthMidleware');
 
 
 
-router.get('/provider/:id',ProviderDisponibilities);
+router.get('/', isAuth, ProviderDisponibilities);
+
+router.post('/', isAuth,setProviderAvailability);
+
+router.post('/update', isAuth,updateProviderAvailability);
+
+// router.get('/days', getdays)
 
 module.exports = router

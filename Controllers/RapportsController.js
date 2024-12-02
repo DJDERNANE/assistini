@@ -97,7 +97,7 @@ exports.getRapportByInvoiceId = async (req, res) => {
                 rd.createdAt, 
                 pro.fullName AS provider_name, 
                 pro.email AS provider_email, 
-                users.fullName AS user_name, 
+                users.nom AS user_name, 
                 users.email AS user_email
             FROM 
                 rapports rp

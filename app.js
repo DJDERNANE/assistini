@@ -68,6 +68,10 @@ const ServiceRoutes = require('./Routes/ServiceRoutes')
 const TeamRoutes = require('./Routes/TeamRoutes');
 const InvoiceRoutes = require('./Routes/InvoiceRoutes');
 const testRoutes = require('./Routes/test');
+const RapportRoutes = require('./Routes/rapportRoutes');
+const MessagesRoutes = require('./Routes/MessageRoutes');
+const MyPatientRoutes = require('./Routes/MypatientRoutes');
+const DashboardRoutes = require('./Routes/DashboardRoutes');
 const isAuth = require('./Midlewares/AuthMidleware');
 
 const { sendMessage, loadMessages } = require('./Controllers/MessageController')
@@ -91,9 +95,11 @@ app.use('/services', isAuth ,ServiceRoutes);
 app.use('/teams', isAuth ,TeamRoutes);
 app.use('/invoice', isAuth ,InvoiceRoutes);
 app.use('/test' ,testRoutes);
-// app.use('/dispo', DispoRoutes);
-
-
+app.use('/dispo', DispoRoutes);
+app.use('/rapport', RapportRoutes);
+app.use('/messages', MessagesRoutes);
+app.use('/mypatient', MyPatientRoutes);
+app.use('/dashboard',isAuth, DashboardRoutes);
 
 app.get('/', (req, res) => { res.send('hello') })
 // app.listen(process.env.PORT, ()=>{

@@ -6,29 +6,89 @@ var { main } = require('../Componenets/MailComponent');
 const fs = require('fs');
 const path = require('path');
 exports.allProviders = async (req, res) => {
-    const Currentuser = req.user
+    const currentUser = req.user;
     try {
-        const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
-        const pageSize = parseInt(req.query.pageSize) || 10; // Default page size to 10 if not provided
-        const startIndex = (page - 1) * pageSize;
-        const endIndex = page * pageSize;
+        // Get today's date or user-provided date for filtering
+        const dateParam = req.query.date;
+        const currentDate = dateParam ? new Date(dateParam) : new Date(); // Default to today if no date is provided
+        const formattedDate = currentDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
 
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = parseInt(req.query.pageSize) || 10;
+        const startIndex = (page - 1) * pageSize;
+
+        // Query to retrieve all providers and filter disponibilities for today
         const [providers] = await db.promise().execute(
-            `SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.location, 
-                    p.phone, p.desc, s.name AS specialtyName,
-                    CASE WHEN f.userId IS NOT NULL THEN true ELSE false END AS isFavorite
+            `SELECT 
+                p.id AS providerId, p.fullName, p.cabinName, p.email, p.address, p.location, 
+                p.phone, p.desc, s.name AS specialtyName,
+                CASE WHEN f.userId IS NOT NULL THEN true ELSE false END AS isFavorite,
+                d.id AS disponibilityId, d.date AS date, d.morning_start_time AS morningStartTime, d.morning_end_time AS morningEndTime, 
+                d.evening_start_time AS eveningStartTime, d.evening_end_time AS eveningEndTime, d.patient_interval AS patientInterval,
+                a.id AS appointmentId, a.date AS appointmentDate, a.from AS appointmentStart, a.to AS appointmentEnd
              FROM providers p
              LEFT JOIN providerspecialties ps ON p.id = ps.providerId
              LEFT JOIN specialties s ON ps.specialtyId = s.id
-             LEFT JOIN favorite_providers f ON p.id = f.providerId AND f.userId = ?`,
-            [Currentuser.id]
+             LEFT JOIN favorite_providers f ON p.id = f.providerId AND f.userId = ?
+             LEFT JOIN disponibilties d ON d.provider_id = p.id
+             LEFT JOIN apointments a ON a.dispo_id = d.id AND a.date = ?  -- Filter appointments for today
+             WHERE d.status = 1
+             ORDER BY p.id ASC, d.date ASC`,
+            [currentUser.id, formattedDate]
         );
 
-        // Slice the providers array based on the indexes
-        const paginatedProviders = providers.slice(startIndex, endIndex);
+        // Process and format data as previously structured
+        const providerMap = {};
+        providers.forEach((row) => {
+            if (!providerMap[row.providerId]) {
+                providerMap[row.providerId] = {
+                    id: row.providerId,
+                    fullName: row.fullName,
+                    cabinName: row.cabinName,
+                    email: row.email,
+                    address: row.address,
+                    location: row.location,
+                    phone: row.phone,
+                    desc: row.desc,
+                    specialtyName: row.specialtyName,
+                    isFavorite: row.isFavorite,
+                    disponibilities: [],
+                };
+            }
 
-        // Calculate the total number of pages
-        const totalPages = Math.ceil(providers.length / pageSize);
+            if (row.disponibilityId) {
+                // Create a new disponibility object if it doesn't already exist for this provider
+                let disponibility = providerMap[row.providerId].disponibilities.find(d => d.id === row.disponibilityId);
+                if (!disponibility) {
+                    disponibility = {
+                        id: row.disponibilityId,
+                        date: row.date,
+                        morningStartTime: row.morningStartTime,
+                        morningEndTime: row.morningEndTime,
+                        eveningStartTime: row.eveningStartTime,
+                        eveningEndTime: row.eveningEndTime,
+                        patientInterval: row.patientInterval,
+                        appointments: [],  // Start with an empty array for appointments
+                    };
+                    providerMap[row.providerId].disponibilities.push(disponibility);
+                }
+
+                // If there is an appointment for this disponibility, add it to the appointments array
+                if (row.appointmentId) {
+                    disponibility.appointments.push({
+                        id: row.appointmentId,
+                        date: row.appointmentDate,
+                        from: row.appointmentStart,
+                        to: row.appointmentEnd,
+                    });
+                }
+            }
+        });
+
+        // Get the paginated providers
+        const paginatedProviders = Object.values(providerMap).slice(startIndex, startIndex + pageSize);
+        const totalPages = Math.ceil(Object.values(providerMap).length / pageSize);
+
         res.json({
             success: true,
             data: paginatedProviders,
@@ -36,13 +96,19 @@ exports.allProviders = async (req, res) => {
             status: 200
         });
     } catch (error) {
+        console.error('Error in allProviders:', error);
         res.status(500).json({
             success: false,
-            errors: error,
+            errors: error.message,
             status: 500
         });
     }
 };
+
+
+
+
+
 
 
 exports.showProvider = async (req, res) => {
@@ -51,9 +117,10 @@ exports.showProvider = async (req, res) => {
     if (Number(id)) {
         try {
             const [currentProvider] = await db.promise().execute(
-                'SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.location, p.phone, p.desc, p.logo, p.services, p.expertises, p.access, p.information   , d.day, d.startTime, d.endTime ' +
+                'SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.location, p.phone, p.desc, p.logo,info.* ' +
                 'FROM providers p ' +
-                'LEFT JOIN disponibilties d ON p.id = d.providerId ' +
+                'LEFT JOIN disponibilties d ON p.id = d.provider_id  ' +
+                'LEFT JOIN info_cabin info ON p.id = info.provider_id  ' +
                 'WHERE p.id = ?',
                 [id]
             );
@@ -129,6 +196,11 @@ exports.SignUp = async (req, res) => {
             [email]
         );
 
+        const [existingProviderByNewEmail] = await db.promise().execute(
+            'SELECT * FROM providers WHERE new_email = ?',
+            [email]
+        );
+
         const [existingProviderByPhone] = await db.promise().execute(
             'SELECT * FROM providers WHERE phone = ?',
             [phone]
@@ -137,6 +209,14 @@ exports.SignUp = async (req, res) => {
         if (existingUserByEmail.length > 0 || existingProviderByEmail.length > 0) {
             return res.status(400).json({
                 message: "Email already exists",
+                success: false,
+                status: 400
+            });
+        }
+
+        if (existingUserByNewEmail.length > 0 ) {
+            return res.status(400).json({
+                message: "Email already exists but not confirmed",
                 success: false,
                 status: 400
             });
@@ -194,16 +274,16 @@ exports.SignUp = async (req, res) => {
 
         // Insert the provider into the database
         const [newProvider] = await db.promise().execute(
-            'INSERT INTO providers (fullName, cabinName, email, password, phone, location, `desc`, address, otp_code, type, argument_num, id_fascial, logo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [fullName, cabinName, email, hashedPassword, phone, location, desc, address, confirmationCode, typeJson, argument_num, id_fascial, logoPath]
+            'INSERT INTO providers (fullName, cabinName, new_email, password, phone, location, `desc`, address, otp_code, argument_num, id_fascial, logo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [fullName, cabinName, email, hashedPassword, phone, location, desc, address, confirmationCode, argument_num, id_fascial, logoPath]
         );
 
         if (newProvider.insertId) {
             // Insert provider specialties
             const insertSpecialtiesPromises = specialties.map(async (specialty) => {
                 await db.promise().execute(
-                    'INSERT INTO providerspecialties (providerId, specialtyId, `name`) VALUES (?, ?, ?)',
-                    [newProvider.insertId, specialty.id, cabinName]
+                    'INSERT INTO providerspecialties (providerId, specialtyId) VALUES (?, ?)',
+                    [newProvider.insertId, specialty.id]
                 );
             });
 
@@ -282,52 +362,66 @@ exports.Login = async (req, res) => {
     }
 };
 
+
+
 exports.updateProvider = async (req, res) => {
     const Currentuser = req.user;
-    const { fullName, cabinName, address} = req.body;
-    
-    if (fullName && cabinName  && address ) {
-        try {
-            // Convert type array to JSON string for storage
-            //const typeJson = JSON.stringify(type);
+    const { fullName, cabinName, address, location } = req.body;
+    const logoFile = req.files && req.files.logo;
 
-            let logoPath = null;
-            const logoFile = req.files && req.files.logo;
-
-            if (logoFile) {
-                // Save the logo file
-                const uploadPath = path.join(__dirname, '../assets/logos/', `${Date.now()}_${logoFile.name}`);
-                fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
-                await logoFile.mv(uploadPath);
-                logoPath = `logos/${Date.now()}_${logoFile.name}`;
-            }
-
-            await db.promise().execute(
-                'UPDATE providers SET fullName = ?, cabinName = ?, address = ?, logo = ? WHERE id = ?',
-                [fullName, cabinName, address, logoPath, Currentuser.id]
-            );
-
-            res.json({
-                success: true,
-                message: 'Provider info updated',
-                status: 200
-            });
-        } catch (error) {
-            console.error(error);
-            res.status(500).json({
-                success: false,
-                message: 'Error updating provider info',
-                status: 500
-            });
-        }
-    } else {
-        res.status(400).json({
+    if (!fullName || !cabinName || !address) {
+        return res.status(400).json({
             success: false,
-            message: 'All fields are required',
+            message: 'Full name, cabin name, and address are required',
             status: 400
         });
     }
+
+    try {
+        let logoPath = null;
+
+        if (logoFile) {
+            // Delete the existing logo file if it exists
+            const [provider] = await db.promise().execute(
+                'SELECT logo FROM providers WHERE id = ?',
+                [Currentuser.id]
+            );
+
+            if (provider.length > 0 && provider[0].logo) {
+                const existingLogoPath = path.join(__dirname, '../assets', provider[0].logo);
+                if (fs.existsSync(existingLogoPath)) {
+                    fs.unlinkSync(existingLogoPath);
+                }
+            }
+
+            // Save the new logo file
+            const uploadPath = path.join(__dirname, '../assets/logos/', `${Date.now()}_${logoFile.name}`);
+            fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+            await logoFile.mv(uploadPath);
+            logoPath = `logos/${Date.now()}_${logoFile.name}`;
+        }
+
+        // Update the provider details
+        await db.promise().execute(
+            'UPDATE providers SET fullName = ?, cabinName = ?, address = ?, location = ?, logo = COALESCE(?, logo) WHERE id = ?',
+            [fullName, cabinName, address, location, logoPath, Currentuser.id]
+        );
+
+        res.json({
+            success: true,
+            message: 'Provider info updated',
+            status: 200
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating provider info',
+            status: 500
+        });
+    }
 };
+
 
 
 
@@ -361,10 +455,10 @@ exports.searchProvider = async (req, res) => {
 
 exports.confirmOtpCode = async (req, res) => {
     const { email, code } = req.body
-    if (code = "0000") {
+    if (code == "0000") {
         await db.promise().execute(
-            'UPDATE providers SET isactive = 1 WHERE email = ?',
-            [email]
+            'UPDATE providers SET isactive = 1, email = ? WHERE new_email = ?',
+            [email, email]
         );
 
         res.status(200).json({
@@ -375,7 +469,7 @@ exports.confirmOtpCode = async (req, res) => {
     } else {
         try {
             const [rows] = await db.promise().execute(
-                'SELECT * FROM providers WHERE email = ? AND otp_code = ?',
+                'SELECT * FROM providers WHERE new_email = ? AND otp_code = ?',
                 [email, code]
             );
 
@@ -383,8 +477,8 @@ exports.confirmOtpCode = async (req, res) => {
                 const currentUser = rows[0]; // Assuming you're expecting only one user
 
                 await db.promise().execute(
-                    'UPDATE providers SET isactive = 1 WHERE email = ?',
-                    [email]
+                    'UPDATE providers SET isactive = 1, email = ? WHERE new_email = ?',
+                    [email, email]
                 );
 
                 res.status(200).json({
@@ -448,6 +542,7 @@ exports.deleteLogo = async (req, res) => {
 
 
 exports.changeEmail = async (req, res) => {
+    
     const Currentuser = req.user
     const { existingEmail, newEmail } = req.body;
     if (existingEmail && newEmail) {
@@ -481,7 +576,7 @@ exports.changeEmail = async (req, res) => {
                         confirmationCode += characters.charAt(Math.floor(Math.random() * charactersLength));
                     }
                     await db.promise().execute(
-                        'UPDATE providers SET otp_code= ?, email = ?, isActive  WHERE id = ?',
+                        'UPDATE providers SET otp_code= ?, new_email = ?, isActive = ?  WHERE id = ?',
                         [confirmationCode, newEmail,0, Currentuser.id]
                     );
     
@@ -503,6 +598,12 @@ exports.changeEmail = async (req, res) => {
                 status: 400
             });
         }
+    }else{
+        res.status(200).json({
+            success: false,
+            message: "all fields are required",
+            status: 400
+        });
     }
 };
 
@@ -624,13 +725,13 @@ exports.activateProvider = async (req,res) =>{
 
 
 exports.providerSpecialties = async (req, res) => {
-    const user = req.user;
+    const id = req.params.id;
 
     try {
         // Fetch provider specialties
         const [specialties] = await db.promise().execute(
             'SELECT * FROM providerspecialties JOIN specialties ON providerspecialties.SpecialtyId= specialties.id WHERE providerId = ?',
-            [user.id]
+            [id]
         );
 
         // Return the result if successful
@@ -645,6 +746,98 @@ exports.providerSpecialties = async (req, res) => {
             success: false,
             message: 'Error fetching provider specialties',
             error: error.message
+        });
+    }
+};
+
+
+    
+exports.updateLogo = async (req, res) => {
+    const currentUser = req.user;
+
+    if (!req.file) {
+        return res.status(400).json({
+            success: false,
+            message: "No file uploaded",
+        });
+    }
+
+    try {
+        // Define the path to save the uploaded logo
+        const logoPath = `/uploads/logos/${req.file.filename}`;
+        
+        // Update the logo path in the database for the current user
+        await db.promise().execute(
+            'UPDATE providers SET logo = ? WHERE id = ?',
+            [logoPath, currentUser.id]
+        );
+
+        // Fetch the updated user data to confirm the update
+        const [updatedUser] = await db.promise().execute(
+            'SELECT * FROM providers WHERE id = ?',
+            [currentUser.id]
+        );
+
+        res.json({
+            success: true,
+            message: "Logo updated successfully",
+            user: updatedUser[0]
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update logo',
+            error: error.message
+        });
+    }
+};
+
+
+
+exports.setInformations = async (req, res) => {
+    const  id  = req.user.id;
+    const { informations, access, expertises, services , langue} = req.body;
+
+    try {
+        const info = await db.promise().execute(`INSERT INTO info_cabin (langue, informations, access, expertises, services, provider_id) VALUES (?, ?, ?, ?, ?, ?)`, [langue, informations, access, expertises, services, id]);
+        res.json({
+            success: true
+        });
+    } catch (error) {
+        res.json({
+            error: error,
+            success: false
+        });
+    }
+};
+exports.getInformations = async (req, res) => {
+    const  id  = req.user.id;
+    
+    try {
+        const info = await db.promise().execute(`SELECT * FROM info_cabin WHERE provider_id = ?`, [id]);
+        res.json({
+            success: true,
+            data: info[0]
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            errors: error
+        });
+    }
+};
+
+exports.updateInformations = async (req, res) => {
+    const id  = req.user.id;
+    const { informations, access, expertises, services, langue } = req.body;
+    try {
+        const info = await db.promise().execute(`UPDATE info_cabin SET langue = ?, informations = ?, access = ?, expertises = ?, services = ? WHERE provider_id = ?`, [langue, informations, access, expertises, services, id]);
+        res.json({
+            success: true
+        });
+    } catch (error) {
+        res.json({
+            success: false
         });
     }
 };

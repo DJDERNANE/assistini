@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const {CreateRdv,allRdvs, confirmRdv, cancelRdv, deleteRdv, closeRdv, patientAllRdvs, allConfirmedRdvs, pricing} = require('../Controllers/RdvController');
+const {CreateRdv,allRdvs, confirmRdv, cancelRdv, deleteRdv, closeRdv, patientAllRdvs, allConfirmedRdvs, pricing, checkRdvForToday, reprogramerRdv} = require('../Controllers/RdvController');
 
-router.get('/', allRdvs);
-router.get('/waitinglist', allConfirmedRdvs);
+router.get('/today', checkRdvForToday);
+router.get('/waitinglist', allRdvs);
 router.get('/patient', patientAllRdvs);
-router.post('/user/:userId/provider/:providerId', CreateRdv);
+router.post('/user/provider/:providerId', CreateRdv);
+router.post('/programer/:id', reprogramerRdv);
 router.put('/confirm/:id', confirmRdv);
 router.put('/cancel/:id', cancelRdv);
 router.put('/close/:id', closeRdv);

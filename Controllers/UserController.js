@@ -5,14 +5,15 @@ const jwt = require('jsonwebtoken')
 var { main, resetPassword } = require('../Componenets/MailComponent')
 const nodemailer = require("nodemailer");
 const transporter = nodemailer.createTransport({
-  host: 'mail.delta-innovation.net', // Your SMTP server hostname
-  port: 465, // Port for secure SMTP
-  secure: true, // true for SSL, false for other ports like 587 or 25
-  auth: {
-      user: 'test@delta-innovation.net', // Your email address
-      pass: 'QQamo}Tig&$w' // Your email password
-  }
-});
+    host: 'mail.mhuv-news.com', // Your SMTP server hostname
+    port: 465, // Port for secure SMTP
+    secure: true, // true for SSL, false for other ports like 587 or 25
+    auth: {
+        user: 'assistini@mhuv-news.com', // Your email address
+        pass: '+iv]nQG?T}KP' // Your email password
+    }
+  });
+
 
 exports.allUsers = async (req, res) => {
     try {
@@ -86,13 +87,12 @@ exports.SignUp = async (req, res) => {
                         confirmationCode += characters.charAt(Math.floor(Math.random() * charactersLength));
                     }
 
-                     // send mail verification link
-                    // const info = await transporter.sendMail({
-                    //       from: '"Assistini" <test@delta-innovation.net>', // sender address
-                    //       to: email, // list of receivers
-                    //       subject: "Account Activation", // Subject line
-                    //       html: `<p>Your confirmation code is:</p><h1>${confirmationCode}</h1>`, // html body
-                    //   });
+                    const info = await transporter.sendMail({
+                          from: '"Assistini" <assistini@mhuv-news.com>', // sender address
+                          to: email, // list of receivers
+                          subject: "Account Activation", // Subject line
+                          html: `<p>Your confirmation code is:</p><h1>${confirmationCode}</h1>`, // html body
+                      });
                 
 
                     const [newUser] = await db.promise().execute(

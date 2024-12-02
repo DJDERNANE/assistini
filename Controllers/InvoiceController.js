@@ -75,13 +75,20 @@ const PDFDocument = require('pdfkit');
 // }
 
 exports.create = async (req, res) => {
-    const { rdvId, serviceIds, total } = req.body;
+    const { rdvId, serviceIds, total,result, conclusion  } = req.body;
     const provider = req.user; // The current user (provider)
     let partnerId = null;
     let serviceIdsArray = Array.isArray(serviceIds) ? serviceIds : [serviceIds];
     let services = []; // Declare services variable here
-
+    
     try {
+
+        db.query('INSERT INTO rapports (rdvId, result, conclusion) VALUES (?, ?, ?)', [rdvId, result, conclusion], (err, result) => {
+            if (err) {
+                console.log(err);
+                res.status(400).json({ success: false, status: 400, message: 'Error saving message' });
+            }
+        });
         // Check if the RDV belongs to a partner
         const [isPartner] = await db.promise().execute(
             `SELECT partnerId FROM partnerclients 
@@ -206,8 +213,15 @@ exports.create = async (req, res) => {
                 [invoiceResult.insertId, total, patientPDFPath]
             );
 
+
+            await db.promise().execute(
+                'UPDATE rdvs SET status = ? WHERE id = ?',
+                ['closed', rdvId]
+            )
+
             res.json({
-                success: true,
+                invoiceId: invoiceResult.insertId,
+                data: patientPDFPath,
                 status: 200
             });
         }
@@ -225,6 +239,7 @@ exports.create = async (req, res) => {
 
 exports.getall = async (req, res) => {
     const user = req.user;
+    const {status} = req.params;
     const paymentStatus = req.query.payment_status; // Get payment status from query parameters
     const page = parseInt(req.query.page) || 1; // Current page number, default to 1
     const pageSize = parseInt(req.query.pageSize) || 6; // Number of records per page, default to 6
@@ -245,7 +260,7 @@ exports.getall = async (req, res) => {
         JOIN 
             providers p ON r.providerId = p.id
         WHERE 
-            r.providerId = ?`;
+            r.providerId = ? `;
         const queryParams = [user.id];
 
         // If payment status is provided, add the condition to the query
@@ -294,6 +309,7 @@ exports.getInvoiceById = async (req, res) => {
                 i.id AS invoice_id, 
                 i.total_price, 
                 i.is_fav,
+                i.payment_status AS invoice_payment_status,
                 i.created_at AS invoice_created_at,  -- Include invoice creation date
                 u.nom AS patient, 
                 p.fullName AS provider, 
@@ -301,6 +317,8 @@ exports.getInvoiceById = async (req, res) => {
                 details.service AS service_name, 
                 details.price AS service_price,
                 pp.total AS partner_paid_price,
+                pp.payment_status AS partner_payment_status,
+                up.payment_status AS user_payment_status,
                 up.total AS user_paid_price,
                 pp.pdf_path AS partner_pdf_path,
                 up.pdf_path AS user_pdf_path,
@@ -342,6 +360,8 @@ exports.getInvoiceById = async (req, res) => {
         // Fetch the partner's share and the user's share
         const partnerPaid = invoice[0].partner_paid_price;
         const userPaid = invoice[0].user_paid_price;
+        const partnerPaymentStatus = invoice[0].partner_payment_status;
+        const userPaymentStatus = invoice[0].user_payment_status;
 
         // Fetch the related rapports based on the rdv_id
         const [rapports] = await db.promise().execute(
@@ -369,6 +389,7 @@ exports.getInvoiceById = async (req, res) => {
         const invoiceData = {
             invoice_id: invoice[0].invoice_id,
             total_price: invoice[0].total_price,
+            payment_status: invoice[0].invoice_payment_status,
             is_fav: invoice[0].is_fav, 
             patient: invoice[0].patient,
             provider: {
@@ -381,13 +402,15 @@ exports.getInvoiceById = async (req, res) => {
                     amount: userPaid || 0,
                     label: 'User Payment',
                     description: 'Amount paid by the user',
-                    path: invoice[0].user_pdf_path
+                    path: invoice[0].user_pdf_path,
+                    status: userPaymentStatus
                 },
                 partner: {
                     amount: partnerPaid || 0,
                     label: 'Partner Payment',
                     description: 'Amount paid by the partner',
-                    path: invoice[0].partner_pdf_path
+                    path: invoice[0].partner_pdf_path,
+                    status: partnerPaymentStatus
                 }
             },
             rapports,  // Include fetched rapports
@@ -454,26 +477,23 @@ exports.getInvoiceById = async (req, res) => {
 
 const generateInvoicePDF = async (invoiceData, recipient, id) => {
     try {
-        const outputDir = path.join(__dirname, '../assets/invoices'); // Ensure directory is correct
-        console.log('Output Directory:', outputDir);
+        // Ensure outputDir is defined and exists
+        const outputDir = path.join(__dirname, '../assets/invoices'); // Define outputDir path here if not defined globally
+        if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-        // Check if the directory exists, if not create it
-        if (!fs.existsSync(outputDir)) {
-            console.log('Directory does not exist. Creating...');
-            fs.mkdirSync(outputDir, { recursive: true });
-        }
-
+        // Set paths for PDF storage and file path
         const pdfFilePath = path.join(outputDir, `invoice-${recipient}-${id}.pdf`);
+        const pdfRelativePath = `/invoices/invoice-${recipient}-${id}.pdf`; // Renamed to avoid conflict
         console.log('PDF File Path:', pdfFilePath);
 
         // Create a new PDF document
         const doc = new PDFDocument({ size: 'A4', margin: 50 });
-
-        // Create a write stream to save the PDF file
         const writeStream = fs.createWriteStream(pdfFilePath);
+
+        // Pipe document to write stream
         doc.pipe(writeStream);
 
-        // Add content to the PDF
+        // Add content to PDF
         doc
             .fontSize(20)
             .text('Invoice', { align: 'center' });
@@ -481,9 +501,9 @@ const generateInvoicePDF = async (invoiceData, recipient, id) => {
         doc.moveDown();
         doc
             .fontSize(12)
-            .text(`Invoice ID: ${invoiceData.invoice_id}`, { align: 'left' })
-            .text(`Recipient: ${recipient === 'patient' ? invoiceData.patient : 'Partner'}`, { align: 'left' })
-            .text(`Provider: ${invoiceData.provider.name}`, { align: 'left' });
+            .text(`Invoice ID: ${invoiceData.invoice_id}`)
+            .text(`Recipient: ${recipient === 'patient' ? invoiceData.patient : 'Partner'}`)
+            .text(`Provider: ${invoiceData.provider.name}`);
 
         doc.moveDown();
 
@@ -503,26 +523,26 @@ const generateInvoicePDF = async (invoiceData, recipient, id) => {
             .fontSize(14)
             .text(`Total Amount: $${totalAmount}`, { align: 'right' });
 
-        // End and finalize the document
+        // Finalize document
         doc.end();
 
-        // Return a promise that resolves when the PDF is fully written
+        // Return a promise for PDF completion
         return new Promise((resolve, reject) => {
             writeStream.on('finish', () => {
-                console.log('PDF generation complete:', pdfFilePath);
-                resolve(pdfFilePath); // Return the path to the saved PDF
+                console.log('PDF generation complete:', pdfRelativePath);
+                resolve(pdfRelativePath); // Return the relative path for further use
             });
             writeStream.on('error', (err) => {
                 console.error('Error writing PDF:', err);
-                reject(err); // Handle any file writing errors
+                reject(err);
             });
         });
     } catch (error) {
         console.error('Error in generateInvoicePDF:', error);
-        throw error; // Re-throw the error for further handling
+        throw error;
+   
     }
 };
-
 
 exports.toggleFavorite = async (req, res) => {
     const { invoiceId } = req.params;
@@ -628,5 +648,161 @@ exports.getFav = async (req, res) => {
 };
 
 
+exports.updatePaymentStatus = async (req, res) => {
+    const { invoiceId } = req.params; // The ID of the invoice to update
+    const { newPaymentStatus } = req.body; // The new payment status from the request body
 
+    try {
+        // Update the payment status of the specified invoice
+        const [result] = await db.promise().execute(
+            'UPDATE invoices SET payment_status = ? WHERE id = ?',
+            [newPaymentStatus, invoiceId]
+        );
+
+        // Check if the invoice was found and updated
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Invoice not found",
+                status: 404
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Payment status updated successfully",
+            status: 200
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Error updating payment status",
+            errors: error
+        });
+    }
+};
+
+
+// Endpoint for paying an invoice
+exports.payInvoice = async (req, res) => {
+    const id = req.params.id; // Invoice ID from URL parameters
+    const { amount, payerType, method } = req.body; // Extract payment amount, payer type, and method from request body
+
+    // Validate that amount is a number
+    if (!amount || isNaN(amount) || !payerType || !method) {
+        return res.status(400).json({
+            success: false,
+            message: "Valid amount, payer type, and method are required",
+            status: 400
+        });
+    }
+
+    try {
+        // Fetch the invoice to ensure it exists
+        const [invoice] = await db.promise().execute(
+            `SELECT id FROM invoices WHERE id = ?`, [id]
+        );
+
+        if (invoice.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Invoice not found',
+                status: 404
+            });
+        }
+
+        // Determine the payment fields to update based on the payer type
+        let updateQuery, updateParams;
+
+        if (payerType === 'user') {
+            // Update user payment status, amount, and method
+            updateQuery = `
+                UPDATE patient_payment
+                SET paid = ?, payment_status = 'paid', method = ?
+                WHERE invoice_id = ?
+            `;
+            updateParams = [parseFloat(amount), method, id];
+        } else if (payerType === 'partner') {
+            // Update partner payment status, amount, and method
+            updateQuery = `
+                UPDATE partner_payment
+                SET paid = ?, payment_status = 'paid', method = ?
+                WHERE invoice_id = ?
+            `;
+            updateParams = [parseFloat(amount), method, id];
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid payer type',
+                status: 400
+            });
+        }
+
+        // Execute the update query for the respective payment
+        await db.promise().execute(updateQuery, updateParams);
+
+        // Fetch updated payment statuses and update invoice status if needed
+        const [paymentStatuses] = await db.promise().execute(
+            `SELECT 
+                up.payment_status AS user_payment_status,
+                pp.payment_status AS partner_payment_status
+            FROM 
+                invoices i
+            LEFT JOIN 
+                patient_payment up ON i.id = up.invoice_id
+            LEFT JOIN 
+                partner_payment pp ON i.id = pp.invoice_id
+            WHERE 
+                i.id = ?`, [id]
+        );
+
+        const userPaymentStatus = paymentStatuses[0].user_payment_status;
+        const partnerPaymentStatus = paymentStatuses[0].partner_payment_status;
+
+        // Update invoice payment status if all payments are marked as 'paid'
+        if (
+            userPaymentStatus === 'paid' && 
+            (partnerPaymentStatus === 'paid' || partnerPaymentStatus === null)
+        ) {
+            await db.promise().execute(
+                `UPDATE invoices SET payment_status = 'paid' WHERE id = ?`,
+                [id]
+            );
+        }
+
+        // Confirm the update
+        const [updatedInvoice] = await db.promise().execute(
+            `SELECT 
+                i.id AS invoice_id,
+                i.payment_status AS invoice_payment_status,
+                pp.total AS partner_paid_price,
+                pp.payment_status AS partner_payment_status,
+                up.total AS user_paid_price,
+                up.payment_status AS user_payment_status
+            FROM 
+                invoices i
+            LEFT JOIN 
+                partner_payment pp ON i.id = pp.invoice_id
+            LEFT JOIN 
+                patient_payment up ON i.id = up.invoice_id
+            WHERE 
+                i.id = ?`, [id]
+        );
+
+        res.json({
+            success: true,
+            message: 'Invoice paid successfully',
+            data: updatedInvoice[0],
+            status: 200
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            errors: error,
+            status: 500
+        });
+    }
+};
 

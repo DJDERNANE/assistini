@@ -106,6 +106,7 @@ exports.deleteSubAdmin = async (req, res) => {
             console.log(error);
             res.json({
                 message: "Error deleting subAdmin",
+                error: error,
                 success: false,
                 status: 500
             });

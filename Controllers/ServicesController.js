@@ -29,10 +29,11 @@ exports.allServices = async (req, res) => {
     const user = req.user;
     try {
         const [services] = await db.promise().execute(
-            `SELECT s.*
-            FROM services s
-            JOIN providerspecialties ps ON s.providerSpecialtyId = ps.id
-            WHERE ps.providerId = ?`,
+            `SELECT s.*, sp.name AS specialtyName
+             FROM services s
+             JOIN providerspecialties ps ON s.providerSpecialtyId = ps.id
+             JOIN specialties sp ON ps.specialtyId = sp.id
+             WHERE ps.providerId = ?`,
             [user.id]
         );
 
