@@ -16,7 +16,7 @@ exports.ProviderDisponibilities = async (req, res) => {
                 d.status
              FROM disponibilties d
              JOIN providers p ON d.provider_id = p.id
-             WHERE p.id = ? AND d.status = 1
+             WHERE p.id = ? AND d.status = 1 AND d.date >= CURDATE()
              ORDER BY d.date ASC`,
             [providerId]
         );

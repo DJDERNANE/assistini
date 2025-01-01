@@ -602,11 +602,29 @@ exports.toggleFavorite = async (req, res) => {
     const user_id = req.user.id;
   
     const query = `
-      SELECT p.id, p.fullName, p.email, p.cabinName
-      FROM providers p
-      JOIN favorite_providers f ON p.id = f.providerId
-      WHERE f.userId = ?
-    `;
+            SELECT 
+                p.id AS providerId, 
+                p.fullName, 
+                p.email, 
+                p.cabinName, 
+                p.logo,
+                JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'date', d.date,
+                        'morningStartTime', d.morning_start_time,
+                        'morningEndTime', d.morning_end_time,
+                        'eveningStartTime', d.evening_start_time,
+                        'eveningEndTime', d.evening_end_time,
+                        'patientInterval', d.patient_interval,
+                        'status', d.status
+                    )
+                ) AS disponibilities
+            FROM providers p
+            JOIN favorite_providers f ON p.id = f.providerId
+            LEFT JOIN disponibilties d ON d.provider_id = p.id AND d.status = 1 AND d.date >= CURDATE()
+            WHERE f.userId = ?
+            GROUP BY p.id
+        `;
   
     db.query(query, [user_id], (err, results) => {
       if (err) return res.status(500).json({ error: 'Server error' });
