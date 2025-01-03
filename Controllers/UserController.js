@@ -87,12 +87,12 @@ exports.SignUp = async (req, res) => {
                         confirmationCode += characters.charAt(Math.floor(Math.random() * charactersLength));
                     }
 
-                    const info = await transporter.sendMail({
-                          from: '"Assistini" <assistini@mhuv-news.com>', // sender address
-                          to: email, // list of receivers
-                          subject: "Account Activation", // Subject line
-                          html: `<p>Your confirmation code is:</p><h1>${confirmationCode}</h1>`, // html body
-                      });
+                    // const info = await transporter.sendMail({
+                    //       from: '"Assistini" <assistini@mhuv-news.com>', // sender address
+                    //       to: email, // list of receivers
+                    //       subject: "Account Activation", // Subject line
+                    //       html: `<p>Your confirmation code is:</p><h1>${confirmationCode}</h1>`, // html body
+                    //   });
                 
 
                     const [newUser] = await db.promise().execute(
@@ -603,7 +603,7 @@ exports.toggleFavorite = async (req, res) => {
   
     const query = `
             SELECT 
-                p.id AS providerId, 
+                p.id AS id, 
                 p.fullName, 
                 p.email, 
                 p.cabinName, 

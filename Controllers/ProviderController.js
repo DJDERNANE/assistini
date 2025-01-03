@@ -116,43 +116,104 @@ exports.showProvider = async (req, res) => {
 
     if (Number(id)) {
         try {
-            const [currentProvider] = await db.promise().execute(
-                'SELECT p.id, p.fullName, p.cabinName, p.email, p.address, p.location, p.phone, p.desc, p.logo,info.* ' +
-                'FROM providers p ' +
-                'LEFT JOIN disponibilties d ON p.id = d.provider_id  ' +
-                'LEFT JOIN info_cabin info ON p.id = info.provider_id  ' +
-                'WHERE p.id = ?',
+            // Fetch the provider with disponibilities and basic info
+            const [providerData] = await db.promise().execute(
+                `SELECT 
+                    p.id AS providerId, 
+                    p.fullName, 
+                    p.cabinName, 
+                    p.email, 
+                    p.address, 
+                    p.location, 
+                    p.phone, 
+                    p.desc, 
+                    p.logo,
+                    d.id AS disponibilityId, 
+                    d.date, 
+                    d.morning_start_time AS morningStartTime, 
+                    d.morning_end_time AS morningEndTime, 
+                    d.evening_start_time AS eveningStartTime, 
+                    d.evening_end_time AS eveningEndTime, 
+                    d.patient_interval AS patientInterval
+                 FROM providers p
+                 LEFT JOIN disponibilties d ON p.id = d.provider_id  AND d.date >= CURDATE()
+                 WHERE p.id = ? `,
                 [id]
             );
 
-            if (currentProvider.length === 0) {
-                res.status(400).json({
+            // Fetch the provider's specialties
+            const [specialties] = await db.promise().execute(
+                `SELECT 
+                    s.id AS specialtyId, 
+                    s.name AS specialtyName 
+                 FROM providerspecialties ps 
+                 JOIN specialties s ON ps.specialtyId = s.id 
+                 WHERE ps.providerId = ?`,
+                [id]
+            );
+
+            if (providerData.length === 0) {
+                return res.status(400).json({
                     success: false,
                     message: 'Provider not found',
                     status: 400
                 });
-            } else {
-                res.json({
-                    success: true,
-                    data: currentProvider,
-                    status: 200
-                });
             }
+
+            // Format the provider's data
+            const provider = {
+                id: providerData[0].providerId,
+                fullName: providerData[0].fullName,
+                cabinName: providerData[0].cabinName,
+                email: providerData[0].email,
+                address: providerData[0].address,
+                location: providerData[0].location,
+                phone: providerData[0].phone,
+                desc: providerData[0].desc,
+                logo: providerData[0].logo,
+                disponibilities: [],
+                specialties: specialties.map((specialty) => ({
+                    id: specialty.specialtyId,
+                    name: specialty.specialtyName,
+                })),
+            };
+
+            // Add disponibilities to the provider object
+            provider.disponibilities = providerData
+                .filter((d) => d.disponibilityId) // Filter out null disponibilities
+                .map((d) => ({
+                    id: d.disponibilityId,
+                    date: d.date,
+                    morningStartTime: d.morningStartTime,
+                    morningEndTime: d.morningEndTime,
+                    eveningStartTime: d.eveningStartTime,
+                    eveningEndTime: d.eveningEndTime,
+                    patientInterval: d.patientInterval,
+                }));
+
+            return res.json({
+                success: true,
+                data: provider,
+                status: 200
+            });
         } catch (error) {
-            res.json({
+            console.error('Error in showProvider:', error);
+            return res.status(500).json({
                 success: false,
-                errors: error,
+                message: 'An error occurred while fetching provider data',
+                errors: error.message,
                 status: 500
             });
         }
     } else {
-        res.status(400).json({
+        return res.status(400).json({
             success: false,
             message: 'Invalid ID',
             status: 400
         });
     }
 };
+
 
 exports.SignUp = async (req, res) => {
     const {
@@ -366,7 +427,7 @@ exports.Login = async (req, res) => {
 
 exports.updateProvider = async (req, res) => {
     const Currentuser = req.user;
-    const { fullName, cabinName, address, location } = req.body;
+    const { fullName, cabinName, address, location, type } = req.body;
     const logoFile = req.files && req.files.logo;
 
     if (!fullName || !cabinName || !address) {
@@ -403,8 +464,8 @@ exports.updateProvider = async (req, res) => {
 
         // Update the provider details
         await db.promise().execute(
-            'UPDATE providers SET fullName = ?, cabinName = ?, address = ?, location = ?, logo = COALESCE(?, logo) WHERE id = ?',
-            [fullName, cabinName, address, location, logoPath, Currentuser.id]
+            'UPDATE providers SET fullName = ?, cabinName = ?, address = ?, location = ?,type=?, logo = COALESCE(?, logo) WHERE id = ?',
+            [fullName, cabinName, address, location,type, logoPath, Currentuser.id]
         );
 
         res.json({
@@ -508,21 +569,72 @@ exports.confirmOtpCode = async (req, res) => {
 }
 
 exports.me = async (req, res) => {
-    const Currentuser = req.user
+    const Currentuser = req.user;
+
     try {
-        const [user] = await db.promise().execute(
-            'SELECT id,fullName,cabinName,email,phone,address,location, type, argument_num, id_fascial, logo FROM providers WHERE id = ?',
+        // Fetch the provider and their specialties
+        const [providerData] = await db.promise().execute(
+            `SELECT 
+                p.id, 
+                p.fullName, 
+                p.cabinName, 
+                p.email, 
+                p.phone, 
+                p.address, 
+                p.location, 
+                p.type, 
+                p.argument_num, 
+                p.id_fascial, 
+                p.logo 
+             FROM providers p 
+             WHERE p.id = ?`,
             [Currentuser.id]
         );
-        console.log(user)
+
+        if (providerData.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found',
+                status: 404,
+            });
+        }
+
+        const provider = providerData[0];
+
+        // Fetch specialties
+        const [specialtiesData] = await db.promise().execute(
+            `SELECT 
+                s.id, 
+                s.name 
+             FROM specialties s 
+             INNER JOIN providerspecialties ps ON s.id = ps.specialtyId 
+             WHERE ps.providerId = ?`,
+            [Currentuser.id]
+        );
+
+        // Map the specialties into an array
+        const specialties = specialtiesData.map((row) => ({
+            id: row.id,
+            name: row.name,
+        }));
+
+        // Attach specialties to the provider object
+        provider.specialties = specialties;
+
+        // Return the response
         res.json({
             success: true,
-            user: user[0]
-        })
+            user: provider,
+        });
     } catch (error) {
-
+        console.error('Error fetching user and specialties:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            status: 500,
+        });
     }
-}
+};
 
 exports.deleteLogo = async (req, res) => {
     const Currentuser = req.user
