@@ -32,7 +32,7 @@ exports.allProviders = async (req, res) => {
              LEFT JOIN favorite_providers f ON p.id = f.providerId AND f.userId = ?
              LEFT JOIN disponibilties d ON d.provider_id = p.id
              LEFT JOIN apointments a ON a.dispo_id = d.id AND a.date = ?  -- Filter appointments for today
-             WHERE d.status = 1
+             WHERE d.status = 1 AND d.date >= CURDATE()
              ORDER BY p.id ASC, d.date ASC`,
             [currentUser.id, formattedDate]
         );
@@ -570,61 +570,86 @@ exports.confirmOtpCode = async (req, res) => {
 
 exports.me = async (req, res) => {
     const Currentuser = req.user;
-
+    console.log(Currentuser.id)
     try {
-        // Fetch the provider and their specialties
         const [providerData] = await db.promise().execute(
             `SELECT 
-                p.id, 
+                p.id AS providerId, 
                 p.fullName, 
                 p.cabinName, 
                 p.email, 
-                p.phone, 
                 p.address, 
                 p.location, 
-                p.type, 
-                p.argument_num, 
-                p.id_fascial, 
-                p.logo 
-             FROM providers p 
-             WHERE p.id = ?`,
+                p.phone, 
+                p.desc, 
+                p.logo,
+                d.id AS disponibilityId, 
+                d.date, 
+                d.morning_start_time AS morningStartTime, 
+                d.morning_end_time AS morningEndTime, 
+                d.evening_start_time AS eveningStartTime, 
+                d.evening_end_time AS eveningEndTime, 
+                d.patient_interval AS patientInterval
+             FROM providers p
+             LEFT JOIN disponibilties d ON p.id = d.provider_id  AND d.date >= CURDATE()
+             WHERE p.id = ? `,
             [Currentuser.id]
+        );
+
+        // Fetch the provider's specialties
+        const [specialties] = await db.promise().execute(
+            `SELECT 
+                s.id AS specialtyId, 
+                s.name AS specialtyName 
+             FROM providerspecialties ps 
+             JOIN specialties s ON ps.specialtyId = s.id 
+             WHERE ps.providerId = ?`,
+             [Currentuser.id]
         );
 
         if (providerData.length === 0) {
-            return res.status(404).json({
+            return res.status(400).json({
                 success: false,
                 message: 'Provider not found',
-                status: 404,
+                status: 400
             });
         }
 
-        const provider = providerData[0];
+        // Format the provider's data
+        const provider = {
+            id: providerData[0].providerId,
+            fullName: providerData[0].fullName,
+            cabinName: providerData[0].cabinName,
+            email: providerData[0].email,
+            address: providerData[0].address,
+            location: providerData[0].location,
+            phone: providerData[0].phone,
+            desc: providerData[0].desc,
+            logo: providerData[0].logo,
+            disponibilities: [],
+            specialties: specialties.map((specialty) => ({
+                id: specialty.specialtyId,
+                name: specialty.specialtyName,
+            })),
+        };
 
-        // Fetch specialties
-        const [specialtiesData] = await db.promise().execute(
-            `SELECT 
-                s.id, 
-                s.name 
-             FROM specialties s 
-             INNER JOIN providerspecialties ps ON s.id = ps.specialtyId 
-             WHERE ps.providerId = ?`,
-            [Currentuser.id]
-        );
+        // Add disponibilities to the provider object
+        provider.disponibilities = providerData
+            .filter((d) => d.disponibilityId) // Filter out null disponibilities
+            .map((d) => ({
+                id: d.disponibilityId,
+                date: d.date,
+                morningStartTime: d.morningStartTime,
+                morningEndTime: d.morningEndTime,
+                eveningStartTime: d.eveningStartTime,
+                eveningEndTime: d.eveningEndTime,
+                patientInterval: d.patientInterval,
+            }));
 
-        // Map the specialties into an array
-        const specialties = specialtiesData.map((row) => ({
-            id: row.id,
-            name: row.name,
-        }));
-
-        // Attach specialties to the provider object
-        provider.specialties = specialties;
-
-        // Return the response
-        res.json({
+        return res.json({
             success: true,
-            user: provider,
+            data: provider,
+            status: 200
         });
     } catch (error) {
         console.error('Error fetching user and specialties:', error);
