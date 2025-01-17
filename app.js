@@ -2,7 +2,7 @@ require('dotenv').config();
 const db = require('./config/config');
 const express = require('express');
 const app = express();
-const Pusher = require("pusher");
+
 
 // socket 
 var server = require('http').createServer(app)
@@ -27,28 +27,6 @@ app.use(express.static('assets'));
 //app.use(bodyParser.json());
 app.use(express.json());
 app.use(cors());
-
-
-
-const pusher = new Pusher({
-    app_id :"1826651",
-    key :"2da70226e27716e3a9a9",
-    secret : "1efff7a9c02294d78aec",
-    cluster : "eu"
-  });
-
-  app.post('/pusher/auth', (req, res) => {
-    const socketId = req.body.socket_id;
-    const channel = req.body.channel_name;
-    const presenceData = {
-      user_id: req.body.user_id,
-      user_info: {
-        name: req.body.name
-      }
-    };
-    const auth = pusher.authenticate(socketId, channel, presenceData);
-    res.send(auth);
-  });
 //++++++++++++++ Routes +++++++++++++++++++++++++++=//
 const UserRoutes = require('./Routes/UserRoutes');
 const CategoryRoutes = require('./Routes/CategoryRoutes');
@@ -102,30 +80,11 @@ app.use('/mypatient', MyPatientRoutes);
 app.use('/dashboard',isAuth, DashboardRoutes);
 
 app.get('/', (req, res) => { res.send('hello') })
-// app.listen(process.env.PORT, ()=>{
-//     console.log(process.env.PORT)
-// })   
 
 
-io.on('connection', (socket) => {
-    console.log('Someone connected');
-
-    socket.on('send_message', ({ senderId, recipientId, message }) => {
-        console.log(`Message from ${senderId} to ${recipientId}: ${message}`);
-       sendMessage(socket, {senderId, recipientId, message} )
-      });
-    // Handle disconnect
-    socket.on('get_load_messages', ({ senderId }) => {
-       loadMessages(socket,senderId )
-    });
-    socket.on('disconnect', () => {
-        console.log('User disconnected');
-    });
-});
-
-// Set io instance to make it accessible in controllers
-
-
+app.post('/testpusher', (req, res) => {
+    
+})
 // Start the server
 server.listen(3000, () => {
     console.log(`Server running on port ${3000}`);

@@ -1,15 +1,10 @@
 const db = require('../config/config');
-const Pusher = require('pusher');
+const { pusher } = require('../config/pusher');
 const path = require('path');
 const fs = require('fs');
 
 
-const pusher = new Pusher({
-    appId: "1880135",
-    key: "f9291680c25a934e2574",
-    secret: "de97a7744e461157dce0",
-    cluster: "eu",
-});
+
 exports.allRdvs = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -351,6 +346,23 @@ exports.CreateRdv = async (req, res) => {
             }
         }
 
+
+        // Create notification
+        const [notification] = await db.promise().execute(
+            `INSERT INTO provider_notifications (providerId, content) VALUES (?, "you have a new rdv for : ${patientName}  from ${from} to ${to} on ${date}")`,
+            [providerId]
+        );
+
+        // send notification using pusher
+        if (notification) {
+            pusher.trigger('provider-channel', 'provider-notification', {
+                notification: notification.insertId,
+                providerId: providerId,
+                content: `you have a new rdv for : ${patientName}  from ${from} to ${to} on ${date}`
+            });
+        }
+
+
         res.status(200).json({
             message: 'Rdv created',
             success: true,
@@ -384,7 +396,7 @@ exports.confirmRdv = async (req, res) => {
     if (Number(id)) {
         try {
             const [myRdv] = await db.promise().execute('SELECT * FROM rdvs WHERE id = ?', [id]);
-
+            const [provider] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [myRdv[0].providerId]);
             if (myRdv.length > 0) {
                 const receipientid = myRdv[0].UserId
                 await db.promise().execute('UPDATE rdvs SET status = ?, note= ?  WHERE id = ?', ['confirmed', note, id]);
@@ -395,7 +407,7 @@ exports.confirmRdv = async (req, res) => {
                         if (err) return res.status(500).json({ error: 'Server error' });
 
                         // Trigger the Pusher event for real-time message sending
-                        pusher.trigger('private-chat', 'new-message', {
+                        pusher.trigger('user-channel', 'new-message', {
                             id,
                             receipientid,
                             message,
@@ -404,6 +416,22 @@ exports.confirmRdv = async (req, res) => {
                         res.status(200).send('Message sent successfully.');
                     }
                 );
+                // save notification
+                const [notification] = await db.query(
+                    `INSERT INTO user_notifications (userId, content) VALUES (?, "your rdv with ${provider[0].cabinName}  has been confirmed")`,
+                    [receipientid,],
+                    (err, results) => {
+                        if (err) return res.status(500).json({ error: 'Server error' });
+                        // send notification using pusher
+                        pusher.trigger('user-channel', 'user-notification', {
+                            notification: notification.insertId,
+                            providerId: id,
+                            content: `your rdv with ${provider[0].cabinName} has been confirmed on ${myRdv[0].date} at ${myRdv[0].from} to ${myRdv[0].to}`,
+                        });
+                    }
+                );
+
+
                 res.json({
                     message: 'Rdv confirmed',
                     success: true,
@@ -439,9 +467,24 @@ exports.cancelRdv = async (req, res) => {
     if (Number(id)) {
         try {
             const [myRdv] = await db.promise().execute('SELECT * FROM rdvs WHERE id = ?', [id]);
-
+            const [provider] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [myRdv[0].providerId]);
             if (myRdv.length > 0) {
                 await db.promise().execute('UPDATE rdvs SET status = ? , note = ? WHERE id = ?', ['canceled', note, id]);
+
+                // save notification
+                const [notification] = await db.query(
+                    `INSERT INTO user_notifications (userId, content) VALUES (?, "your rdv with ${provider[0].cabinName}  has been canceled")`,
+                    [receipientid,],
+                    (err, results) => {
+                        if (err) return res.status(500).json({ error: 'Server error' });
+                        // send notification using pusher
+                        pusher.trigger('user-channel', 'user-notification', {
+                            notification: notification.insertId,
+                            providerId: id,
+                            content: `your rdv with ${provider[0].cabinName} has been canceled `,
+                        });
+                    }
+                );
 
                 res.json({
                     message: 'Rdv canceled',
