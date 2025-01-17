@@ -355,7 +355,7 @@ exports.CreateRdv = async (req, res) => {
 
         // send notification using pusher
         if (notification) {
-            pusher.trigger('provider-channel', 'provider-notification', {
+            pusher.trigger(`provider-${providerId}-channel`, 'provider-notification', {
                 notification: notification.insertId,
                 providerId: providerId,
                 content: `you have a new rdv for : ${patientName}  from ${from} to ${to} on ${date}`
@@ -407,7 +407,7 @@ exports.confirmRdv = async (req, res) => {
                         if (err) return res.status(500).json({ error: 'Server error' });
 
                         // Trigger the Pusher event for real-time message sending
-                        pusher.trigger('user-channel', 'new-message', {
+                        pusher.trigger(`user-${receipientid}-channel`, 'new-message', {
                             id,
                             receipientid,
                             message,
@@ -423,7 +423,7 @@ exports.confirmRdv = async (req, res) => {
                     (err, results) => {
                         if (err) return res.status(500).json({ error: 'Server error' });
                         // send notification using pusher
-                        pusher.trigger('user-channel', 'user-notification', {
+                        pusher.trigger(`user-${receipientid}-channel`, 'user-notification', {
                             notification: notification.insertId,
                             providerId: id,
                             content: `your rdv with ${provider[0].cabinName} has been confirmed on ${myRdv[0].date} at ${myRdv[0].from} to ${myRdv[0].to}`,
@@ -474,11 +474,11 @@ exports.cancelRdv = async (req, res) => {
                 // save notification
                 const [notification] = await db.query(
                     `INSERT INTO user_notifications (userId, content) VALUES (?, "your rdv with ${provider[0].cabinName}  has been canceled")`,
-                    [receipientid,],
+                    [myRdv[0].UserId],
                     (err, results) => {
                         if (err) return res.status(500).json({ error: 'Server error' });
                         // send notification using pusher
-                        pusher.trigger('user-channel', 'user-notification', {
+                        pusher.trigger(`user-${myRdv[0].UserId}-channel`, 'user-notification', {
                             notification: notification.insertId,
                             providerId: id,
                             content: `your rdv with ${provider[0].cabinName} has been canceled `,

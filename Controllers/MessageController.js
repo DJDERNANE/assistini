@@ -1,19 +1,9 @@
 
-const Pusher = require('pusher');
+const pusher = require('../config/pusher');
 const db = require('../config/config');
-
-// Pusher setup
-const pusher = new Pusher({
-  appId: "1880135",
-  key: "f9291680c25a934e2574",
-  secret: "de97a7744e461157dce0",
-  cluster: "eu",
-});
-
 
 exports.messages = async (req, res) => {
   const { recipient_id } = req.params;
-  console.log(recipient_id)
   const sender_id = req.user.id
   const query = `
     SELECT * FROM messages 
@@ -36,11 +26,13 @@ exports.sendMessage = (req, res) => {
 
   // Determine if the sender is a provider based on role
   let isProvider;
-
+  let channel;
   if (role === 'provider') {
     isProvider = 1;
+    channel = `provider-${recipient_id}-channel`;
   } else if (role === 'user') {
     isProvider = 0;
+    channel = `user-${recipient_id}-channel`;
   } else {
     return res.status(400).json({ error: 'Invalid role' });
   }
@@ -53,7 +45,7 @@ exports.sendMessage = (req, res) => {
       if (err) return res.status(500).json({ error: 'Server error' });
 
       // Trigger the Pusher event for real-time message sending
-      pusher.trigger('private-chat', 'new-message', {
+      pusher.trigger(channel, 'new-message', {
         sender_id,
         recipient_id,
         message,
