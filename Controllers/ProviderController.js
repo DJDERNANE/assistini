@@ -128,6 +128,11 @@ exports.showProvider = async (req, res) => {
                     p.phone, 
                     p.desc, 
                     p.logo,
+                    i.services,
+                    i.expertises,
+                    i.access,
+                    i.informations,
+                    i.langue,
                     d.id AS disponibilityId, 
                     d.date, 
                     d.morning_start_time AS morningStartTime, 
@@ -137,6 +142,7 @@ exports.showProvider = async (req, res) => {
                     d.patient_interval AS patientInterval
                  FROM providers p
                  LEFT JOIN disponibilties d ON p.id = d.provider_id  AND d.date >= CURDATE()
+                 LEFT JOIN  info_cabin i ON p.id = i.provider_id 
                  WHERE p.id = ? `,
                 [id]
             );
@@ -171,6 +177,10 @@ exports.showProvider = async (req, res) => {
                 phone: providerData[0].phone,
                 desc: providerData[0].desc,
                 logo: providerData[0].logo,
+                services: providerData[0].services,
+                expertises: providerData[0].expertises,
+                informations: providerData[0].informations,
+                langue: providerData[0].langue,
                 disponibilities: [],
                 specialties: specialties.map((specialty) => ({
                     id: specialty.specialtyId,

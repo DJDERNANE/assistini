@@ -8,7 +8,7 @@ const fs = require('fs');
 exports.allRdvs = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const statusRdv = req.query.status || confirmed;
+        const statusRdv = req.query.status || "confirmed";
         const pageSize = parseInt(req.query.pageSize) || 6;
         const offset = (page - 1) * pageSize;
 
@@ -32,7 +32,7 @@ exports.allRdvs = async (req, res) => {
                 LIMIT ${pageSize} OFFSET ${offset}`,
             [req.user.id, statusRdv]
         );
-
+        console.log(req.user.id);
         // Fetch the total count of records
         const [countResult] = await db.promise().execute(
             'SELECT COUNT(DISTINCT r.id) AS totalCount ' +
@@ -243,17 +243,46 @@ exports.patientAllRdvs = async (req, res) => {
         const userId = req.user.id; // Current user ID
 
         const [rdvs] = await db.promise().execute(
-            `SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, 
-                u.nom AS userName, u.email AS userEmail, u.phone,
-                CASE 
-                    WHEN f.userId IS NOT NULL THEN TRUE
-                    ELSE FALSE
-                END AS isFavorite
-                FROM rdvs r 
-                JOIN providers p ON r.providerId = p.id 
-                JOIN users u ON r.UserId = u.id 
-                LEFT JOIN favorite_providers f ON f.providerId = r.providerId AND f.userId = ? 
-                WHERE r.UserId = ?`,
+            `SELECT 
+    r.id, 
+    r.status, 
+    r.patientName, 
+    r.createdAt, 
+    p.cabinName, 
+    r.motif,
+    r.mode, 
+    a.date, 
+    a.from, 
+    a.to,
+    s.name AS specialtyName,
+    u.nom AS userName, 
+    u.email AS userEmail, 
+    u.phone,
+    COUNT(d.id) AS documents,
+    CASE 
+        WHEN f.userId IS NOT NULL THEN TRUE
+        ELSE FALSE
+    END AS isFavorite
+FROM 
+    rdvs r 
+JOIN 
+    providers p ON r.providerId = p.id 
+JOIN 
+    users u ON r.UserId = u.id 
+LEFT JOIN 
+    favorite_providers f ON f.providerId = r.providerId AND f.userId = ? 
+JOIN 
+    apointments a ON r.appointmentId = a.id
+JOIN 
+    specialties s ON r.specialty_id = s.id
+LEFT JOIN 
+    documents d ON r.id = d.rdvId
+WHERE 
+    r.UserId = ?
+GROUP BY 
+    r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif, r.mode, 
+    a.date, a.from, a.to, s.name, u.nom, u.email, u.phone, f.userId;
+`,
             [userId, userId] // Using the same userId to check if the provider is a favorite and to fetch the user's appointments
         );
 
