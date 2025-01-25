@@ -771,15 +771,17 @@ exports.payInvoice = async (req, res) => {
             );
         }
 
-        // Confirm the update
+        // Confirm the update and include the PDF path
         const [updatedInvoice] = await db.promise().execute(
             `SELECT 
                 i.id AS invoice_id,
                 i.payment_status AS invoice_payment_status,
                 pp.total AS partner_paid_price,
                 pp.payment_status AS partner_payment_status,
+                pp.pdf_path AS partner_pdf_path,
                 up.total AS user_paid_price,
-                up.payment_status AS user_payment_status
+                up.payment_status AS user_payment_status,
+                up.pdf_path AS user_pdf_path
             FROM 
                 invoices i
             LEFT JOIN 
@@ -790,10 +792,11 @@ exports.payInvoice = async (req, res) => {
                 i.id = ?`, [id]
         );
 
+      
         res.json({
             success: true,
             message: 'Invoice paid successfully',
-            data: updatedInvoice[0],
+            data:  updatedInvoice[0],
             status: 200
         });
 
