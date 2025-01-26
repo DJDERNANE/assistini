@@ -77,7 +77,7 @@ exports.setProviderAvailability = async (req, res) => {
 };
 
 exports.updateProviderAvailability = async (req, res) => {
-    const providerId = req.user.id;  // Assuming req.user contains the authenticated provider’s data
+    const providerId = req.user.id; // Assuming req.user contains the authenticated provider’s data
     const { availability, date } = req.body;
     const { from, to } = date;
 
@@ -85,34 +85,85 @@ exports.updateProviderAvailability = async (req, res) => {
         let currentDate = new Date(from);
         const endDate = new Date(to);
 
+        // Validate the received data
+        if (!availability || !from || !to || !providerId) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid data provided",
+            });
+        }
+
+        console.log("Received data:", { providerId, availability, from, to });
+
+        // Loop through each date in the range
         while (currentDate <= endDate) {
             const currentDateStr = currentDate.toISOString().split('T')[0]; // Format date as 'YYYY-MM-DD'
-            const { morningStartTime, morningEndTime, eveningStartTime, eveningEndTime, patientInterval, status } = availability;
 
-            // Check if an entry for the provider and specific date already exists
-            const [existingAvailability] = await db.promise().execute(
-                'SELECT id FROM disponibilties WHERE provider_id = ? AND date = ?',
-                [providerId, currentDateStr]
-            );
+            const {
+                morningStartTime,
+                morningEndTime,
+                eveningStartTime,
+                eveningEndTime,
+                patientInterval,
+                status,
+            } = availability;
 
-            if (existingAvailability.length > 0) {
-                // Update the existing entry
-                await db.promise().execute(
-                    `UPDATE disponibilties 
+            try {
+                // Check if an entry for the provider and specific date already exists
+                const [existingAvailability] = await db
+                    .promise()
+                    .execute(
+                        'SELECT id FROM disponibilties WHERE provider_id = ? AND date = ?',
+                        [providerId, currentDateStr]
+                    );
+
+                console.log("Processing date:", currentDateStr);
+                console.log("existingAvailability:", existingAvailability);
+
+                if (existingAvailability.length > 0) {
+                    // Update the existing entry
+                    const [updateResult] = await db.promise().execute(
+                        `UPDATE disponibilties 
                          SET morning_start_time = ?, morning_end_time = ?, 
                              evening_start_time = ?, evening_end_time = ?, 
                              patient_interval = ?, status = ?
                          WHERE provider_id = ? AND date = ?`,
-                    [morningStartTime, morningEndTime, eveningStartTime, eveningEndTime, patientInterval, status, providerId, currentDateStr]
-                );
-            } else {
-                // Insert a new entry if none exists for this date
-                await db.promise().execute(
-                    `INSERT INTO disponibilties 
+                        [
+                            morningStartTime,
+                            morningEndTime,
+                            eveningStartTime,
+                            eveningEndTime,
+                            patientInterval,
+                            status,
+                            providerId,
+                            currentDateStr,
+                        ]
+                    );
+                    console.log("Update result:", updateResult);
+                } else {
+                    // Insert a new entry if none exists for this date
+                    const [insertResult] = await db.promise().execute(
+                        `INSERT INTO disponibilties 
                          (provider_id, date, morning_start_time, morning_end_time, 
                           evening_start_time, evening_end_time, patient_interval, status) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [providerId, currentDateStr, morningStartTime, morningEndTime, eveningStartTime, eveningEndTime, patientInterval, status]
+                        [
+                            providerId,
+                            currentDateStr,
+                            morningStartTime,
+                            morningEndTime,
+                            eveningStartTime,
+                            eveningEndTime,
+                            patientInterval,
+                            status,
+                        ]
+                    );
+                    console.log("Insert result:", insertResult);
+                }
+            } catch (queryError) {
+                console.error(
+                    `Error updating/creating availability for ${currentDateStr}:`,
+                    queryError
                 );
             }
 
@@ -125,7 +176,7 @@ exports.updateProviderAvailability = async (req, res) => {
             message: "Provider availability updated successfully",
         });
     } catch (error) {
-        console.error(error);
+        console.error("Error in updateProviderAvailability:", error);
         res.status(500).json({
             success: false,
             message: "Error updating availability",
