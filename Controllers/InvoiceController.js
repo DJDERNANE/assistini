@@ -762,8 +762,7 @@ exports.payInvoice = async (req, res) => {
 
         // Update invoice payment status if all payments are marked as 'paid'
         if (
-            userPaymentStatus === 'paid' && 
-            (partnerPaymentStatus === 'paid' || partnerPaymentStatus === null)
+            userPaymentStatus === 'paid'
         ) {
             await db.promise().execute(
                 `UPDATE invoices SET payment_status = 'paid' WHERE id = ?`,

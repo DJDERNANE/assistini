@@ -285,7 +285,7 @@ exports.SignUp = async (req, res) => {
             });
         }
 
-        if (existingUserByNewEmail.length > 0 ) {
+        if (existingUserByNewEmail.length > 0) {
             return res.status(400).json({
                 message: "Email already exists but not confirmed",
                 success: false,
@@ -400,7 +400,7 @@ exports.Login = async (req, res) => {
             } else {
                 bcrypt.compare(password, currentProvider[0].password, (err, result) => {
                     if (result) {
-                        const token = jwt.sign({ email: email, id: currentProvider[0].id,cabinName : currentProvider[0].cabinName }, 'secret', { expiresIn: '24h' });
+                        const token = jwt.sign({ email: email, id: currentProvider[0].id, cabinName: currentProvider[0].cabinName }, 'secret', { expiresIn: '24h' });
                         res.json({
                             message: 'Logged In',
                             success: true,
@@ -475,7 +475,7 @@ exports.updateProvider = async (req, res) => {
         // Update the provider details
         await db.promise().execute(
             'UPDATE providers SET fullName = ?, cabinName = ?, address = ?, location = ?,type=?, logo = COALESCE(?, logo) WHERE id = ?',
-            [fullName, cabinName, address, location,type, logoPath, Currentuser.id]
+            [fullName, cabinName, address, location, type, logoPath, Currentuser.id]
         );
 
         res.json({
@@ -580,7 +580,15 @@ exports.confirmOtpCode = async (req, res) => {
 
 exports.me = async (req, res) => {
     const Currentuser = req.user;
-    console.log(Currentuser.id)
+
+    if (!Currentuser || !Currentuser.id) {
+        return res.status(400).json({
+            success: false,
+            message: "User is not authenticated",
+            status: 400,
+        });
+    }
+
     try {
         const [providerData] = await db.promise().execute(
             `SELECT 
@@ -593,18 +601,38 @@ exports.me = async (req, res) => {
                 p.phone, 
                 p.desc, 
                 p.logo,
+                p.id_fascial,
+                i.services, 
+                i.expertises, 
+                i.access, 
+                i.informations, 
+                i.langue,
+                i.transport,
+                i.horaires,
+                i.info_utils,
+                i.num_arg,
                 d.id AS disponibilityId, 
-                d.date, 
+                d.date AS disponibilityDate, 
                 d.morning_start_time AS morningStartTime, 
                 d.morning_end_time AS morningEndTime, 
                 d.evening_start_time AS eveningStartTime, 
                 d.evening_end_time AS eveningEndTime, 
                 d.patient_interval AS patientInterval
              FROM providers p
-             LEFT JOIN disponibilties d ON p.id = d.provider_id  AND d.date >= CURDATE()
-             WHERE p.id = ? `,
+             LEFT JOIN info_cabin i ON i.provider_id = p.id
+             LEFT JOIN disponibilties d ON p.id = d.provider_id AND d.date >= CURDATE()
+             WHERE p.id = ?
+             ORDER BY d.date IS NULL, d.date DESC`,
             [Currentuser.id]
         );
+
+        if (providerData.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Provider not found",
+                status: 404,
+            });
+        }
 
         // Fetch the provider's specialties
         const [specialties] = await db.promise().execute(
@@ -614,18 +642,10 @@ exports.me = async (req, res) => {
              FROM providerspecialties ps 
              JOIN specialties s ON ps.specialtyId = s.id 
              WHERE ps.providerId = ?`,
-             [Currentuser.id]
+            [Currentuser.id]
         );
 
-        if (providerData.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Provider not found',
-                status: 400
-            });
-        }
-
-        // Format the provider's data
+        // Format the provider data
         const provider = {
             id: providerData[0].providerId,
             fullName: providerData[0].fullName,
@@ -636,40 +656,48 @@ exports.me = async (req, res) => {
             phone: providerData[0].phone,
             desc: providerData[0].desc,
             logo: providerData[0].logo,
-            disponibilities: [],
+            services: providerData[0].services,
+            expertises: providerData[0].expertises,
+            access: providerData[0].access,
+            informations: providerData[0].informations,
+            langue: providerData[0].langue,
+            transport: providerData[0].transport,
+            info_utils: providerData[0].info_utils,
+            horaires: providerData[0].horaires,
+            num_arg: providerData[0].num_arg,
+            id_fascial: providerData[0].id_fascial,
+            disponibilities: providerData
+                .filter((d) => d.disponibilityId)
+                .map((d) => ({
+                    id: d.disponibilityId,
+                    date: d.disponibilityDate,
+                    morningStartTime: d.morningStartTime,
+                    morningEndTime: d.morningEndTime,
+                    eveningStartTime: d.eveningStartTime,
+                    eveningEndTime: d.eveningEndTime,
+                    patientInterval: d.patientInterval,
+                })),
             specialties: specialties.map((specialty) => ({
                 id: specialty.specialtyId,
                 name: specialty.specialtyName,
             })),
         };
 
-        // Add disponibilities to the provider object
-        provider.disponibilities = providerData
-            .filter((d) => d.disponibilityId) // Filter out null disponibilities
-            .map((d) => ({
-                id: d.disponibilityId,
-                date: d.date,
-                morningStartTime: d.morningStartTime,
-                morningEndTime: d.morningEndTime,
-                eveningStartTime: d.eveningStartTime,
-                eveningEndTime: d.eveningEndTime,
-                patientInterval: d.patientInterval,
-            }));
-
         return res.json({
             success: true,
             data: provider,
-            status: 200
+            status: 200,
         });
     } catch (error) {
-        console.error('Error fetching user and specialties:', error);
+        console.error("Error fetching provider data:", error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error',
+            message: "Internal server error",
             status: 500,
         });
     }
 };
+
 
 exports.deleteLogo = async (req, res) => {
     const Currentuser = req.user
@@ -689,7 +717,7 @@ exports.deleteLogo = async (req, res) => {
 
 
 exports.changeEmail = async (req, res) => {
-    
+
     const Currentuser = req.user
     const { existingEmail, newEmail } = req.body;
     if (existingEmail && newEmail) {
@@ -704,7 +732,7 @@ exports.changeEmail = async (req, res) => {
                     message: "this email doesn't exist ",
                     status: 400
                 });
-            }else{
+            } else {
                 const [userEmail] = await db.promise().execute(
                     'SELECT * FROM providers WHERE email = ?',
                     [newEmail]
@@ -724,11 +752,11 @@ exports.changeEmail = async (req, res) => {
                     }
                     await db.promise().execute(
                         'UPDATE providers SET otp_code= ?, new_email = ?, isActive = ?  WHERE id = ?',
-                        [confirmationCode, newEmail,0, Currentuser.id]
+                        [confirmationCode, newEmail, 0, Currentuser.id]
                     );
-    
+
                     await main(newEmail, confirmationCode);
-    
+
                     res.json({
                         message: "code sent, Check your email ",
                         success: true,
@@ -736,7 +764,7 @@ exports.changeEmail = async (req, res) => {
                     });
                 }
             }
-          
+
         } catch (error) {
             console.log(error);
             res.status(400).json({
@@ -745,7 +773,7 @@ exports.changeEmail = async (req, res) => {
                 status: 400
             });
         }
-    }else{
+    } else {
         res.status(200).json({
             success: false,
             message: "all fields are required",
@@ -785,7 +813,7 @@ exports.changePassword = async (req, res) => {
             }
         });
     } catch (error) {
-        
+
         res.status(400).json({
             success: false,
             errors: error,
@@ -795,7 +823,7 @@ exports.changePassword = async (req, res) => {
 };
 
 
-exports.blockProvider = async (req,res) =>{
+exports.blockProvider = async (req, res) => {
     const { id } = req.params;
     if (id) {
         try {
@@ -822,7 +850,7 @@ exports.blockProvider = async (req,res) =>{
                 });
             }
         } catch (error) {
-            
+
             res.json({
                 message: 'Error retrieving provider',
                 success: false,
@@ -833,7 +861,7 @@ exports.blockProvider = async (req,res) =>{
 }
 
 
-exports.activateProvider = async (req,res) =>{
+exports.activateProvider = async (req, res) => {
     const { id } = req.params;
     if (id) {
         try {
@@ -860,7 +888,7 @@ exports.activateProvider = async (req,res) =>{
                 });
             }
         } catch (error) {
-            
+
             res.json({
                 message: 'Error retrieving provider',
                 success: false,
@@ -898,7 +926,7 @@ exports.providerSpecialties = async (req, res) => {
 };
 
 
-    
+
 exports.updateLogo = async (req, res) => {
     const currentUser = req.user;
 
@@ -912,7 +940,7 @@ exports.updateLogo = async (req, res) => {
     try {
         // Define the path to save the uploaded logo
         const logoPath = `/uploads/logos/${req.file.filename}`;
-        
+
         // Update the logo path in the database for the current user
         await db.promise().execute(
             'UPDATE providers SET logo = ? WHERE id = ?',
@@ -942,11 +970,11 @@ exports.updateLogo = async (req, res) => {
 
 
 exports.setInformations = async (req, res) => {
-    const  id  = req.user.id;
-    const { informations, access, expertises, services , langue} = req.body;
+    const id = req.user.id;
+    const { informations, access, expertises, services, langue, horaires, info_utils, transport, num_arg } = req.body;
 
     try {
-        const info = await db.promise().execute(`INSERT INTO info_cabin (langue, informations, access, expertises, services, provider_id) VALUES (?, ?, ?, ?, ?, ?)`, [langue, informations, access, expertises, services, id]);
+        const info = await db.promise().execute(`INSERT INTO info_cabin (langue, informations, access, expertises, services, provider_id, horaires, info_utils, transport, num_arg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [langue, informations, access, expertises, services, id, horaires, info_utils, transport, num_arg]);
         res.json({
             success: true
         });
@@ -958,8 +986,8 @@ exports.setInformations = async (req, res) => {
     }
 };
 exports.getInformations = async (req, res) => {
-    const  id  = req.user.id;
-    
+    const id = req.user.id;
+
     try {
         const info = await db.promise().execute(`SELECT * FROM info_cabin WHERE provider_id = ?`, [id]);
         res.json({
@@ -975,10 +1003,10 @@ exports.getInformations = async (req, res) => {
 };
 
 exports.updateInformations = async (req, res) => {
-    const id  = req.user.id;
-    const { informations, access, expertises, services, langue } = req.body;
+    const id = req.user.id;
+    const { informations, access, expertises, services, langue, horaires, info_utils, transport, num_arg } = req.body;
     try {
-        const info = await db.promise().execute(`UPDATE info_cabin SET langue = ?, informations = ?, access = ?, expertises = ?, services = ? WHERE provider_id = ?`, [langue, informations, access, expertises, services, id]);
+        const info = await db.promise().execute(`UPDATE info_cabin SET langue = ?, informations = ?, access = ?, expertises = ?, services = ?, horaires = ?, info_utils = ?, transport = ?, num_arg = ? WHERE provider_id = ?`, [langue, informations, access, expertises, services, horaires, info_utils, transport, num_arg, id]);
         res.json({
             success: true
         });

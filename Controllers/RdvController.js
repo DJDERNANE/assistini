@@ -9,7 +9,7 @@ exports.allRdvs = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const statusRdv = req.query.status || "confirmed";
-        const pageSize = parseInt(req.query.pageSize) || 6;
+        const pageSize = parseInt(req.query.pageSize) || 9;
         const offset = (page - 1) * pageSize;
 
         // Fetch the appointment records
@@ -148,7 +148,7 @@ exports.watingList = async (req, res) => {
 exports.allConfirmedRdvs = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const pageSize = parseInt(req.query.pageSize) || 6;
+        const pageSize = parseInt(req.query.pageSize) || 9;
         const offset = (page - 1) * pageSize;
 
         // Fetch the appointment records
