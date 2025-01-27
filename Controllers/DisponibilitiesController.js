@@ -3,6 +3,8 @@ const db = require('../config/config');
 exports.ProviderDisponibilities = async (req, res) => {
     const providerId = req.user.id;
 
+    const test = "test";
+    console.log(test);
     try {
         // SQL query to retrieve provider's disponibilities with updated fields
         const [dispo] = await db.promise().execute(
@@ -80,6 +82,7 @@ exports.updateProviderAvailability = async (req, res) => {
     const providerId = req.user.id; // Assuming req.user contains the authenticated provider’s data
     const { availability, date } = req.body;
     const { from, to } = date;
+ 
 
     try {
         let currentDate = new Date(from);
