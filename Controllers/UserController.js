@@ -461,7 +461,7 @@ exports.me = async(req, res)=>{
    const Currentuser = req.user 
   try {
     const [user] = await db.promise().execute(
-        'SELECT id,nom, prenom,birthday,email,phone,codePostal, sexe,SSNum, address FROM users WHERE id = ?',
+        'SELECT id,nom, prenom,birthday,email,phone,codePostal, sexe,SSNum, address, logo FROM users WHERE id = ?',
         [Currentuser.id]
     );
     res.json({
