@@ -2,7 +2,9 @@ const db = require('../config/config');
 const { pusher } = require('../config/pusher');
 const path = require('path');
 const fs = require('fs');
-
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+const jwt = require('jsonwebtoken')
 
 
 exports.allRdvs = async (req, res) => {
@@ -518,6 +520,11 @@ exports.cancelRdv = async (req, res) => {
                             providerId: id,
                             content: `your rdv with ${provider[0].cabinName} has been canceled `,
                         });
+
+
+                        pusher.trigger(`user-${myRdv[0].providerId}-channel`, 'rdv-update', {
+                            providerId: myRdv[0].providerId,
+                        });
                     }
                 );
 
@@ -560,6 +567,9 @@ exports.closeRdv = async (req, res) => {
             if (myRdv.length > 0) {
                 await db.promise().execute('UPDATE rdvs SET status = ? WHERE id = ?', ['closed', id]);
 
+                pusher.trigger(`user-${myRdv[0].providerId}-channel`, 'rdv-update', {
+                    providerId: myRdv[0].providerId,
+                });
                 res.json({
                     message: 'Rdv closed',
                     success: true,
@@ -613,6 +623,10 @@ exports.deleteRdv = async (req, res) => {
             }
         } catch (error) {
             console.log(error);
+
+            pusher.trigger(`user-${myRdv[0].providerId}-channel`, 'rdv-update', {
+                providerId: myRdv[0].providerId,
+            });
             res.json({
                 message: 'Error deleting Rdv',
                 success: false,
@@ -657,6 +671,9 @@ exports.reprogramerRdv = async (req, res) => {
             [userId, date]
         );
 
+
+        
+       
         if (dispo.length === 0) {
             return res.status(404).json({
                 message: 'Availability not found for the selected date',
@@ -675,7 +692,9 @@ exports.reprogramerRdv = async (req, res) => {
             'UPDATE rdvs SET status = ?, date = ?, appointmentId = ? WHERE id = ?',
             ['confirmed', date, appointment.insertId, id]
         );
-
+        pusher.trigger(`user-${userId}-channel`, 'rdv-update', {
+            providerId: userId,
+        });
         res.status(200).json({
             message: 'Rdv confirmed',
             success: true,
@@ -774,6 +793,95 @@ exports.checkRdvForToday = async (req, res) => {
 };
 
 
+exports.SignUpAndCreateRdv = async (req, res) => {
+    const user = req.user;
+    const { nom, prenom, birthday, email, phone, location, sexe, type, specialtyId, motif, from, to, date } = req.body;
+
+    if (!nom || !prenom || !birthday || !email  || !phone || !sexe  || !type  || !specialtyId || !motif) {
+        return res.status(400).json({
+            message: "All fields are required",
+            success: false
+        });
+    }
+
+    try {
+        // Check if email or phone exists
+        const [existingUser] = await db.promise().execute('SELECT * FROM users WHERE email = ? OR phone = ?', [email, phone]);
+        if (existingUser.length > 0) {
+            return res.status(400).json({ message: "Email or phone already exists", success: false });
+        }
+
+        const hashedPassword = await bcrypt.hash("12345678", saltRounds);
+        let confirmationCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+        // Create user
+        const [newUser] = await db.promise().execute(
+            'INSERT INTO users (nom, prenom, birthday, email, password, phone, sexe, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [nom, prenom, birthday, email, hashedPassword, phone, sexe, location]
+        );
+
+        const userId = newUser.insertId;
+
+        // Verify provider exists
+        const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [user.id]);
+        if (providerExist.length === 0) {
+            return res.status(404).json({ message: 'Provider not found', success: false });
+        }
+
+        // Check availability
+        const [dispo] = await db.promise().execute(
+            'SELECT * FROM disponibilties WHERE provider_id = ? AND date = ? AND status = 1',
+            [user.id, date]
+        );
+        if (dispo.length === 0) {
+            return res.status(404).json({ message: 'No availability for the selected date', success: false });
+        }
+
+        // Create appointment
+        const [appointment] = await db.promise().execute(
+            'INSERT INTO apointments (dispo_id, date, `from`, `to`) VALUES (?, ?, ?, ?)',
+            [dispo[0].id, date, from, to]
+        );
+
+        // Create RDV
+        const fullname = `${user.nom} ${user.prenom}`;
+        const [rdv] = await db.promise().execute(
+            'INSERT INTO rdvs (patientName, UserId, mode, providerId, specialty_id, motif, date, appointmentId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [fullname, userId, type, user.id, specialtyId, motif, date, appointment.insertId]
+        );
+
+        // Handle document uploads
+        if (req.files && req.files.documents) {
+            const files = Array.isArray(req.files.documents) ? req.files.documents : [req.files.documents];
+            for (let file of files) {
+                const filePath = `docs/${Date.now()}_${file.name}`;
+                const uploadPath = path.join(__dirname, '../assets/', filePath);
+                fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+                await file.mv(uploadPath);
+                await db.promise().execute('INSERT INTO documents (documents, rdvId, name) VALUES (?, ?, ?)', [filePath, rdv.insertId, file.name]);
+            }
+        }
+
+        // Send notification
+        const [notification] = await db.promise().execute(
+            'INSERT INTO provider_notifications (providerId, content) VALUES (?, ?)',
+            [user.id, `New RDV for ${fullname} from ${from} to ${to} on ${date}`]
+        );
+
+        if (notification) {
+            pusher.trigger(`provider-${user.id}-channel`, 'provider-notification', {
+                notification: notification.insertId,
+                userId: userId,
+                content: `New RDV for ${fullname} from ${from} to ${to} on ${date}`
+            });
+        }
+
+        res.status(200).json({ message: "User created and RDV scheduled", success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error processing request", error: error.message, success: false });
+    }
+};
 
 
 
