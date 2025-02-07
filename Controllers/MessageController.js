@@ -1,7 +1,7 @@
 
-const pusher = require('../config/pusher');
-const db = require('../config/config');
 
+const db = require('../config/config');
+const { pusher } = require('../config/pusher');
 exports.messages = async (req, res) => {
   const { recipient_id } = req.params;
   const sender_id = req.user.id
