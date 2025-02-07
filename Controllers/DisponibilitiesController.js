@@ -41,23 +41,75 @@ exports.ProviderDisponibilities = async (req, res) => {
     }
 };
 
+
+
 exports.setProviderAvailability = async (req, res) => {
-    const providerId = req.user.id;  // Assuming req.user contains the authenticated provider’s data
-    const { availability, date } = req.body;
+    const providerId = req.user.id; // Assuming req.user contains the authenticated provider’s data
+    const dayNameToIndex = {
+        Sunday: 0,
+        Monday: 1,
+        Tuesday: 2,
+        Wednesday: 3,
+        Thursday: 4,
+        Friday: 5,
+        Saturday: 6,
+    };
+    // Extract and validate request body
+    const { availability, date, excludedDays } = req.body;
+
+    if (!availability || !date || !excludedDays) {
+        return res.status(400).json({
+            success: false,
+            message: "Missing required fields in request body",
+        });
+    }
+
     const { from, to } = date;
+    const { morningStartTime, morningEndTime, eveningStartTime, eveningEndTime, patientInterval, status } = availability;
+
+    if (!from || !to || !morningStartTime || !morningEndTime || !eveningStartTime || !eveningEndTime || !patientInterval || typeof status !== 'number') {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid or incomplete availability data",
+        });
+    }
 
     try {
         let currentDate = new Date(from);
         const endDate = new Date(to);
 
+        // Ensure the start date is not after the end date
+        if (currentDate > endDate) {
+            return res.status(400).json({
+                success: false,
+                message: "Start date cannot be after end date",
+            });
+        }
+
         while (currentDate <= endDate) {
             const currentDateStr = currentDate.toISOString().split('T')[0]; // Format date as 'YYYY-MM-DD'
-            const { morningStartTime, morningEndTime, eveningStartTime, eveningEndTime, patientInterval, status } = availability;
+            const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+            console.log("Processing date:", currentDateStr);
+            console.log("dayOfWeek:", dayOfWeek);
+            // Convert excludedDays (day names) to numeric indices
+            const excludedDayIndices = excludedDays.map(dayName => dayNameToIndex[dayName.trim()]);
 
-            // Insert availability for the current day
+            // Check if the current day is excluded
+            const finalStatus = excludedDayIndices.includes(dayOfWeek) ? 0 : status;
+
+            // Insert availability for the current day into the database
             await db.promise().execute(
                 'INSERT INTO disponibilties (provider_id, date, morning_start_time, morning_end_time, evening_start_time, evening_end_time, patient_interval, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                [providerId, currentDateStr, morningStartTime, morningEndTime, eveningStartTime, eveningEndTime, patientInterval, status]
+                [
+                    providerId,
+                    currentDateStr,
+                    morningStartTime,
+                    morningEndTime,
+                    eveningStartTime,
+                    eveningEndTime,
+                    patientInterval,
+                    finalStatus,
+                ]
             );
 
             // Move to the next day
@@ -72,12 +124,11 @@ exports.setProviderAvailability = async (req, res) => {
         console.error(error);
         res.status(500).json({
             success: false,
-            errors: error,
             message: "Error updating availability",
+            error: error.message,
         });
     }
 };
-
 exports.updateProviderAvailability = async (req, res) => {
     const providerId = req.user.id; // Assuming req.user contains the authenticated provider’s data
     const { availability, date } = req.body;
