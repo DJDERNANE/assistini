@@ -2,6 +2,7 @@ require('dotenv').config();
 const db = require('./config/config');
 const express = require('express');
 const app = express();
+const cron = require('node-cron');
 
 
 // socket 
@@ -50,6 +51,7 @@ const RapportRoutes = require('./Routes/RapportRoutes');
 const MessagesRoutes = require('./Routes/MessageRoutes');
 const MyPatientRoutes = require('./Routes/MypatientRoutes');
 const DashboardRoutes = require('./Routes/DashboardRoutes');
+const { RdvTimeOver } = require('./Controllers/RdvController');
 const isAuth = require('./Midlewares/AuthMidleware');
 
 const { sendMessage, loadMessages } = require('./Controllers/MessageController')
@@ -85,6 +87,12 @@ app.get('/', (req, res) => { res.send('hello') })
 app.post('/testpusher', (req, res) => {
     
 })
+
+cron.schedule('0 0 * * *', () => { // Runs every day
+    RdvTimeOver();
+    console.log("Cron job executed");
+});
+
 // Start the server
 server.listen(3000, () => {
     console.log(`Server running on port ${3000}`);

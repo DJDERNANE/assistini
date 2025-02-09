@@ -884,4 +884,13 @@ exports.SignUpAndCreateRdv = async (req, res) => {
 };
 
 
+exports.RdvTimeOver = async () => {
+    try {
+        const [rdvs] = await db.promise().execute(
+            `UPDATE rdvs r SET status = 'closed', note = 'Time over' WHERE r.date < CURDATE() AND ( r.status = 'pending' OR r.status = 'confirmed')`
+        )
+    } catch (error) {
+        console.error(error);
+    }
+}
 
