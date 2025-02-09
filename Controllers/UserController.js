@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
         user: 'assistini@mhuv-news.com', // Your email address
         pass: '+iv]nQG?T}KP' // Your email password
     }
-  });
+});
 
 
 exports.allUsers = async (req, res) => {
@@ -78,10 +78,10 @@ exports.SignUp = async (req, res) => {
             });
         }
         bcrypt.hash(password, saltRound, async (err, hash) => {
-            if (!err)   {
+            if (!err) {
                 try {
                     let confirmationCode = '';
-                    const characters = '0123456789'; 
+                    const characters = '0123456789';
                     const charactersLength = 4;
                     for (let i = 0; i < 4; i++) {
                         confirmationCode += characters.charAt(Math.floor(Math.random() * charactersLength));
@@ -93,7 +93,7 @@ exports.SignUp = async (req, res) => {
                     //       subject: "Account Activation", // Subject line
                     //       html: `<p>Your confirmation code is:</p><h1>${confirmationCode}</h1>`, // html body
                     //   });
-                
+
 
                     const [newUser] = await db.promise().execute(
                         'INSERT INTO users (nom, prenom, birthday, email, password, phone, codePostal, sexe, SSNum, otp_code, location, logo) VALUES (? , ? ,?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -147,12 +147,12 @@ exports.Login = async (req, res) => {
                     status: 400
                 });
             } else {
-                if(user[0].isactive === 0 ){
-                    return res.status(401).json({ success:false, message: 'not active' });
+                if (user[0].isactive === 0) {
+                    return res.status(401).json({ success: false, message: 'not active' });
                 }
-                
-                  
-                
+
+
+
                 bcrypt.compare(password, user[0].password, (err, result) => {
                     if (result) {
                         const token = jwt.sign({ email: email, id: user[0].id }, 'secret', { expiresIn: '24h' });
@@ -228,42 +228,28 @@ exports.showUser = async (req, res) => {
 };
 
 exports.updateUser = async (req, res) => {
-    const { id } = req.params;
-    if (Number(id)) {
+    const Currentuser = req.user;
         try {
-            const [user] = await db.promise().execute(
-                'SELECT * FROM users WHERE id = ?',
-                [id]
-            );
+            const { nom, prenom, birthday, phone, codePostal, sexe, SSNum } = req.body;
+            if (nom && prenom && birthday && phone && sexe) {
+                await db.promise().execute(
+                    'UPDATE users SET nom= ?, prenom = ?, birthday = ?, phone = ?, codePostal = ?, sexe = ?, SSNum = ? WHERE id = ?',
+                    [nom, prenom, birthday, phone, codePostal, sexe, SSNum, Currentuser.id]
+                );
 
-            if (user.length > 0) {
-                const { nom, prenom, birthday, phone, codePostal, sexe, SSNum } = req.body;
-
-                if (nom && prenom && birthday && phone && sexe) {
-                    await db.promise().execute(
-                        'UPDATE users SET nom= ?, prenom = ?, birthday = ?, phone = ?, codePostal = ?, sexe = ?, SSNum = ? WHERE id = ?',
-                        [nom, prenom, birthday, phone, codePostal, sexe, SSNum, id]
-                    );
-
-                    res.json({
-                        success: true,
-                        message: "user info updated",
-                        status: 200
-                    });
-                } else {
-                    res.status(400).json({
-                        success: false,
-                        message: "all fields are required",
-                        status: 400
-                    });
-                }
+                res.json({
+                    success: true,
+                    message: "user info updated",
+                    status: 200
+                });
             } else {
                 res.status(400).json({
                     success: false,
-                    message: "user not found",
+                    message: "all fields are required",
                     status: 400
                 });
             }
+
         } catch (error) {
             console.log(error);
             res.status(400).json({
@@ -272,13 +258,7 @@ exports.updateUser = async (req, res) => {
                 status: 400
             });
         }
-    } else {
-        res.status(400).json({
-            success: false,
-            message: "Invalid Id ",
-            status: 400
-        });
-    }
+   
 };
 
 exports.checkEmail = async (req, res) => {
@@ -416,8 +396,8 @@ exports.ResetPassword = async (req, res) => {
 };
 
 
-exports.confirmOtpCode = async(req, res)=>{
-    const {email, code} = req.body
+exports.confirmOtpCode = async (req, res) => {
+    const { email, code } = req.body
     try {
         const [rows] = await db.promise().execute(
             'SELECT * FROM users WHERE email = ? AND otp_code = ?',
@@ -452,28 +432,28 @@ exports.confirmOtpCode = async(req, res)=>{
             status: 500
         });
     }
-    
+
 
 }
 
 
-exports.me = async(req, res)=>{
-   const Currentuser = req.user 
-  try {
-    const [user] = await db.promise().execute(
-        'SELECT id,nom, prenom,birthday,email,phone,codePostal, sexe,SSNum, address, logo FROM users WHERE id = ?',
-        [Currentuser.id]
-    );
-    res.json({
-        success: true,
-        user: user[0],
-    })
-  } catch (error) {
-    
-  }
+exports.me = async (req, res) => {
+    const Currentuser = req.user
+    try {
+        const [user] = await db.promise().execute(
+            'SELECT id,nom, prenom,birthday,email,phone,codePostal, sexe,SSNum, address, logo FROM users WHERE id = ?',
+            [Currentuser.id]
+        );
+        res.json({
+            success: true,
+            user: user[0],
+        })
+    } catch (error) {
+
+    }
 }
 
-exports.blockUser = async (req,res) =>{
+exports.blockUser = async (req, res) => {
     const { id } = req.params;
     if (id) {
         try {
@@ -500,7 +480,7 @@ exports.blockUser = async (req,res) =>{
                 });
             }
         } catch (error) {
-            
+
             res.json({
                 message: 'Error retrieving user',
                 success: false,
@@ -511,7 +491,7 @@ exports.blockUser = async (req,res) =>{
 }
 
 
-exports.activateuser = async (req,res) =>{
+exports.activateuser = async (req, res) => {
     const { id } = req.params;
     if (id) {
         try {
@@ -538,7 +518,7 @@ exports.activateuser = async (req,res) =>{
                 });
             }
         } catch (error) {
-            
+
             res.json({
                 message: 'Error retrieving user',
                 success: false,
@@ -552,55 +532,55 @@ exports.activateuser = async (req,res) =>{
 exports.toggleFavorite = async (req, res) => {
     const user_id = req.user.id;
     const { provider_id } = req.body;
-  
+
     // Check if provider exists
     const providerQuery = `SELECT * FROM providers WHERE id = ?`;
-  
+
     db.query(providerQuery, [provider_id], (err, providerResults) => {
-      if (err) return res.status(500).json({ error: 'Server error' });
-  
-      if (providerResults.length === 0) {
-        return res.status(404).json({ error: 'Provider not found' });
-      }
-  
-      // Check if provider is already in the user's favorites
-      const checkFavoritesQuery = `
+        if (err) return res.status(500).json({ error: 'Server error' });
+
+        if (providerResults.length === 0) {
+            return res.status(404).json({ error: 'Provider not found' });
+        }
+
+        // Check if provider is already in the user's favorites
+        const checkFavoritesQuery = `
         SELECT * FROM favorite_providers WHERE userId = ? AND providerId = ?
       `;
-  
-      db.query(checkFavoritesQuery, [user_id, provider_id], (err, favResults) => {
-        if (err) return res.status(500).json({ error: 'Server error' });
-  
-        if (favResults.length > 0) {
-          // Provider is already in favorites, so remove it (toggle off)
-          const deleteQuery = `
+
+        db.query(checkFavoritesQuery, [user_id, provider_id], (err, favResults) => {
+            if (err) return res.status(500).json({ error: 'Server error' });
+
+            if (favResults.length > 0) {
+                // Provider is already in favorites, so remove it (toggle off)
+                const deleteQuery = `
             DELETE FROM favorite_providers WHERE userId = ? AND providerId = ?
           `;
-  
-          db.query(deleteQuery, [user_id, provider_id], (err, results) => {
-            if (err) return res.status(500).json({ error: 'Server error' });
-  
-            return res.status(200).json({ message: 'Provider removed from favorites' });
-          });
-        } else {
-          // Provider is not in favorites, so add it (toggle on)
-          const insertQuery = `
+
+                db.query(deleteQuery, [user_id, provider_id], (err, results) => {
+                    if (err) return res.status(500).json({ error: 'Server error' });
+
+                    return res.status(200).json({ message: 'Provider removed from favorites' });
+                });
+            } else {
+                // Provider is not in favorites, so add it (toggle on)
+                const insertQuery = `
             INSERT INTO favorite_providers (userId, providerId) 
             VALUES (?, ?)
           `;
-  
-          db.query(insertQuery, [user_id, provider_id], (err, results) => {
-            if (err) return res.status(500).json({ error: 'Server error' });
-  
-            res.status(200).json({ message: 'Provider added to favorites' });
-          });
-        }
-      });
+
+                db.query(insertQuery, [user_id, provider_id], (err, results) => {
+                    if (err) return res.status(500).json({ error: 'Server error' });
+
+                    res.status(200).json({ message: 'Provider added to favorites' });
+                });
+            }
+        });
     });
-  };
-  exports.listFavorites = async (req, res) => {
+};
+exports.listFavorites = async (req, res) => {
     const user_id = req.user.id;
-  
+
     const query = `
             SELECT 
                 p.id AS id, 
@@ -625,18 +605,18 @@ exports.toggleFavorite = async (req, res) => {
             WHERE f.userId = ?
             GROUP BY p.id
         `;
-  
-    db.query(query, [user_id], (err, results) => {
-      if (err) return res.status(500).json({ error: 'Server error' });
-  
-  
-      res.json({data:results});
-    });
-  };
-  
 
-  exports.getUserPartners = async (req, res) => {
-    const {userId} = req.params; // Assuming req.user contains the logged-in user's information
+    db.query(query, [user_id], (err, results) => {
+        if (err) return res.status(500).json({ error: 'Server error' });
+
+
+        res.json({ data: results });
+    });
+};
+
+
+exports.getUserPartners = async (req, res) => {
+    const { userId } = req.params; // Assuming req.user contains the logged-in user's information
 
     try {
         // Query to get partner information for the given user ID

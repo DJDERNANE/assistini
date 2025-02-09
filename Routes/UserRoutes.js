@@ -9,7 +9,7 @@ const {SignUp, Login, allUsers,showUser, updateUser,checkEmail,ResetPassword, co
 router.get('/me',isAuth,me);
  router.post('/register',SignUp);
  router.post('/login',Login);
- router.put('/:id', updateUser);
+ router.put('/',isAuth, updateUser);
 router.get('/', allUsers);
 router.get('/user/:id', showUser);
  router.post('/checkEmail',checkEmail);
