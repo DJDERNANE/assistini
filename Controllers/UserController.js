@@ -466,7 +466,7 @@ exports.me = async(req, res)=>{
     );
     res.json({
         success: true,
-        user: user
+        user: user[0],
     })
   } catch (error) {
     
