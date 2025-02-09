@@ -17,6 +17,9 @@ exports.allProviders = async (req, res) => {
         const pageSize = parseInt(req.query.pageSize) || 10;
         const startIndex = (page - 1) * pageSize;
 
+        const searchQuery = req.query.search || ''; // Get search term from query params
+        const searchPattern = `%${searchQuery}%`; // Prepare for SQL LIKE query
+
         // Query to retrieve all providers and filter disponibilities for today
         const [providers] = await db.promise().execute(
             `SELECT 
@@ -33,8 +36,9 @@ exports.allProviders = async (req, res) => {
              LEFT JOIN disponibilties d ON d.provider_id = p.id
              LEFT JOIN apointments a ON a.dispo_id = d.id AND a.date = ?  -- Filter appointments for today
              WHERE d.status = 1 AND d.date >= CURDATE()
+             AND p.cabinName LIKE ?  -- Search by provider name
              ORDER BY p.id ASC, d.date ASC`,
-            [currentUser.id, formattedDate]
+            [currentUser.id, formattedDate, searchPattern]
         );
 
         // Process and format data as previously structured
@@ -104,6 +108,7 @@ exports.allProviders = async (req, res) => {
         });
     }
 };
+
 
 
 
