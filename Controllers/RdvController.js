@@ -886,11 +886,23 @@ exports.SignUpAndCreateRdv = async (req, res) => {
 
 exports.RdvTimeOver = async () => {
     try {
-        const [rdvs] = await db.promise().execute(
-            `UPDATE rdvs r SET status = 'closed', note = 'Time over' WHERE r.date < CURDATE() AND ( r.status = 'pending' OR r.status = 'confirmed')`
-        )
+        const connection = await db.promise().getConnection(); // Get a connection
+
+        // Set the time zone
+        await connection.query(`SET time_zone = '+01:00';`);
+
+        // Execute the update query
+        const [rdvs] = await connection.execute(
+            `UPDATE rdvs 
+             SET status = 'closed', note = 'Time over' 
+             WHERE date < CURDATE() 
+             AND (status = 'pending' OR status = 'confirmed');`
+        );
+
+        connection.release(); // Release the connection
     } catch (error) {
         console.error(error);
     }
-}
+};
+
 

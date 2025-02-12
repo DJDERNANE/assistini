@@ -1008,16 +1008,39 @@ exports.getInformations = async (req, res) => {
 };
 
 exports.updateInformations = async (req, res) => {
-    const id = req.user.id;
+    const id = req.user?.id;
     const { informations, access, expertises, services, langue, horaires, info_utils, transport, num_arg } = req.body;
+
+    console.log("Received ID:", id);
+    console.log("Request Body:", req.body);
+
+    if (!id) {
+        return res.status(400).json({ success: false, error: "User ID is missing." });
+    }
+
     try {
-        const info = await db.promise().execute(`UPDATE info_cabin SET langue = ?, informations = ?, access = ?, expertises = ?, services = ?, horaires = ?, info_utils = ?, transport = ?, num_arg = ? WHERE provider_id = ?`, [langue, informations, access, expertises, services, horaires, info_utils, transport, num_arg, id]);
-        res.json({
-            success: true
-        });
+        const [result] = await db.promise().execute(
+            `UPDATE info_cabin 
+             SET langue = ?, informations = ?, access = ?, expertises = ?, services = ?, horaires = ?, 
+                 info_utils = ?, transport = ?, num_arg = ?
+             WHERE provider_id = ?`,
+            [langue, informations, access, expertises, services, horaires, info_utils, transport, num_arg, id]
+        );
+
+        console.log("SQL Update Result:", result);
+
+        if (result.affectedRows > 0 && result.changedRows === 0) {
+            return res.json({
+                success: true,
+                message: "No changes were made (same values as before)."
+            });
+        }
+
+        res.json({ success: true });
     } catch (error) {
-        res.json({
-            success: false
-        });
+        console.error("SQL Error:", error);
+        res.status(500).json({ success: false, error: error.message || "Internal Server Error" });
     }
 };
+
+
