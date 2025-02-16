@@ -283,7 +283,15 @@ WHERE
     r.UserId = ?
 GROUP BY 
     r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif, r.mode, 
-    a.date, a.from, a.to, s.name, u.nom, u.email, u.phone, f.userId;
+    a.date, a.from, a.to, s.name, u.nom, u.email, u.phone, f.userId
+ORDER BY 
+    CASE 
+        WHEN r.status = 'pending' THEN 1
+        WHEN r.status = 'confirmed' THEN 2
+        ELSE 3
+    END,
+    r.createdAt DESC;
+
 `,
             [userId, userId] // Using the same userId to check if the provider is a favorite and to fetch the user's appointments
         );
