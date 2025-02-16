@@ -22,9 +22,7 @@ exports.messages = async (req, res) => {
 exports.sendMessage = (req, res) => {
   const { recipient_id, message } = req.body;
   const sender_id = req.user.id;
-  const { role } = req.params; // Assume role is passed in the route parameter
-
-  // Determine if the sender is a provider based on role
+  const { role } = req.params; 
   let isProvider;
   let channel;
   if (role === 'provider') {
@@ -96,4 +94,73 @@ exports.getAllMyMessages = async (req, res) => {
 
     res.json({data:results});
   });
+};exports.getAllMyMessages = async (req, res) => {
+  const sender_id = req.user.id;
+  const { role } = req.params;
+  const { search } = req.query;  // Extracting nom and prenom from query parameters
+
+  // Validate and set table and nameFields based on the role
+  let table, nameFields;
+  if (role === 'provider') {
+    table = 'providers';
+    nameFields = 'u.fullName';
+  } else if (role === 'user') {
+    table = 'users';
+    nameFields = 'u.nom, u.prenom';
+  } else {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  // SQL query to fetch most recent messages for the given user/role
+  let query = `
+    SELECT 
+      u.id, 
+      ${nameFields}, 
+      u.email, 
+      u.logo, 
+      m.content, 
+      m.created_at, 
+      u.location
+    FROM ${table} u
+    JOIN messages m ON (
+      (u.id = m.senderId OR u.id = m.receiverId) 
+      AND m.created_at = (
+        SELECT MAX(m2.created_at)
+        FROM messages m2
+        WHERE (m2.senderId = u.id OR m2.receiverId = u.id)
+          AND (m2.senderId = ? OR m2.receiverId = ?)
+      )
+    )
+    WHERE (m.senderId = ? OR m.receiverId = ?)
+  `;
+
+  // If nom or prenom filters are provided, add them to the WHERE clause
+  let queryParams = [sender_id, sender_id, sender_id, sender_id];
+  
+  if (table === 'providers') {
+    query += ` AND u.fullName LIKE ?`;
+    queryParams.push(`%${search}%`);
+  }else{
+    query += ` AND (u.nom LIKE ? OR u.prenom LIKE ?)`;
+    queryParams.push(`%${search}%`, `%${search}%`);
+  }
+
+  query += ' ORDER BY m.created_at DESC';
+
+  try {
+    // Execute the query with the dynamically constructed queryParams
+    db.query(query, queryParams, (err, results) => {
+      if (err) {
+        console.error('Database query error:', err); // Log the error for debugging
+        return res.status(500).json({ error: 'Server error' });
+      }
+
+      // Return the results
+      res.json({ data: results });
+    });
+  } catch (error) {
+    console.error('Error in getAllMyMessages:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 };
+
