@@ -4,15 +4,8 @@ const saltRound = 10;
 const jwt = require('jsonwebtoken')
 var { main, resetPassword } = require('../Componenets/MailComponent')
 const nodemailer = require("nodemailer");
-const transporter = nodemailer.createTransport({
-    host: 'mail.mhuv-news.com', // Your SMTP server hostname
-    port: 465, // Port for secure SMTP
-    secure: true, // true for SSL, false for other ports like 587 or 25
-    auth: {
-        user: 'assistini@mhuv-news.com', // Your email address
-        pass: '+iv]nQG?T}KP' // Your email password
-    }
-});
+const fs = require('fs');
+const path = require('path');
 
 
 exports.allUsers = async (req, res) => {
@@ -229,37 +222,67 @@ exports.showUser = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
     const Currentuser = req.user;
-        try {
-            const { nom, prenom, birthday, phone, codePostal, sexe, SSNum } = req.body;
-            if (nom && prenom && birthday && phone && sexe) {
-                await db.promise().execute(
-                    'UPDATE users SET nom= ?, prenom = ?, birthday = ?, phone = ?, codePostal = ?, sexe = ?, SSNum = ? WHERE id = ?',
-                    [nom, prenom, birthday, phone, codePostal, sexe, SSNum, Currentuser.id]
-                );
+    try {
+        const { nom, prenom, birthday, phone, codePostal, sexe, SSNum } = req.body;
+        const logoFile = req.files && req.files.logo;
+        
+        if (logoFile) {
+            // Delete the existing logo file if it exists
+            const [user] = await db.promise().execute(
+                'SELECT logo FROM users WHERE id = ?',
+                [Currentuser.id]
+            );
 
-                res.json({
-                    success: true,
-                    message: "user info updated",
-                    status: 200
-                });
-            } else {
-                res.status(400).json({
-                    success: false,
-                    message: "all fields are required",
-                    status: 400
-                });
+            if (user.length > 0 && user[0].logo) {
+                const existingLogoPath = path.join(__dirname, '../assets', user[0].logo);
+                if (fs.existsSync(existingLogoPath)) {
+                    fs.unlinkSync(existingLogoPath);
+                }
             }
 
-        } catch (error) {
-            console.log(error);
+            // Save the new logo file
+            const uploadPath = path.join(__dirname, '../assets/logos/', `${Date.now()}_${logoFile.name}`);
+            fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+            await logoFile.mv(uploadPath);
+
+            const logoPath = `logos/${Date.now()}_${logoFile.name}`;
+
+            await db.promise().execute(
+                'UPDATE users SET logo = ? WHERE id = ?',
+                [logoPath, Currentuser.id]
+            );
+        }
+
+        // Check if required fields are present
+        if (nom && prenom && birthday && phone && sexe) {
+            await db.promise().execute(
+                'UPDATE users SET nom = ?, prenom = ?, birthday = ?, phone = ?, codePostal = ?, sexe = ?, SSNum = ? WHERE id = ?',
+                [nom, prenom, birthday, phone, codePostal, sexe, SSNum, Currentuser.id]
+            );
+
+            res.json({
+                success: true,
+                message: "User info updated successfully",
+                status: 200
+            });
+        } else {
             res.status(400).json({
                 success: false,
-                message: 'Error updating user',
+                message: "All fields are required",
                 status: 400
             });
         }
-   
+
+    } catch (error) {
+        console.error(error);  // More detailed error logging
+        res.status(400).json({
+            success: false,
+            message: 'Error updating user',
+            status: 400
+        });
+    }
 };
+
 
 exports.checkEmail = async (req, res) => {
     const { email } = req.body;
