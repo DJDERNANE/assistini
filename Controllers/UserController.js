@@ -234,7 +234,7 @@ exports.updateUser = async (req, res) => {
             );
 
             if (user.length > 0 && user[0].logo) {
-                const existingLogoPath = path.join(__dirname, '../assets', user[0].logo);
+                const existingLogoPath = path.join(__dirname, '../assets/logos', user[0].logo);
                 if (fs.existsSync(existingLogoPath)) {
                     fs.unlinkSync(existingLogoPath);
                 }
