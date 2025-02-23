@@ -13,7 +13,8 @@ exports.allRdvs = async (req, res) => {
         const statusRdv = req.query.status || "confirmed";
         const pageSize = parseInt(req.query.pageSize) || 9;
         const offset = (page - 1) * pageSize;
-
+        const userId = req.user.admin ? req.user.admin : req.user.id;
+        console.log('User ID:', userId);
         // Fetch the appointment records
         const [rows] = await db.promise().execute(
             `SELECT COUNT(DISTINCT r.id) AS totalCount, r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif,r.mode,
@@ -32,9 +33,9 @@ exports.allRdvs = async (req, res) => {
                 GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.nom, u.prenom, u.email 
                 ORDER BY r.urgency DESC, r.createdAt DESC 
                 LIMIT ${pageSize} OFFSET ${offset}`,
-            [req.user.id, statusRdv]
+            [userId, statusRdv]
         );
-        console.log(req.user.id);
+      
         // Fetch the total count of records
         const [countResult] = await db.promise().execute(
             'SELECT COUNT(DISTINCT r.id) AS totalCount ' +
@@ -43,7 +44,7 @@ exports.allRdvs = async (req, res) => {
             'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON r.id = d.rdvId ' +
             'WHERE r.providerId = ? AND r.status = ?',
-            [req.user.id, statusRdv]
+            [userId, statusRdv]
         );
 
         const totalRecords = countResult[0].totalCount;
@@ -100,6 +101,8 @@ exports.allRdvs = async (req, res) => {
 };
 
 exports.watingList = async (req, res) => {
+    const userId = req.user.admin ? req.user.admin : req.user.id;
+    console.log('User ID:', userId);
     try {
         const [rows] = await db.promise().execute(
             'SELECT r.id, r.patientName, r.createdAt, r.mode, r.motif, r.date, ' +
@@ -111,7 +114,7 @@ exports.watingList = async (req, res) => {
             'LEFT JOIN documents d ON r.id = d.rdvId ' +
             'WHERE r.providerId = ? AND r.status = ? ' +
             'GROUP BY r.id, r.patientName, r.createdAt, r.mode, r.motif, r.date',
-            [req.user.id, 'pending']
+            [userId, 'pending']
         );
 
         // Process the results to format documents correctly
@@ -152,7 +155,7 @@ exports.allConfirmedRdvs = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const pageSize = parseInt(req.query.pageSize) || 9;
         const offset = (page - 1) * pageSize;
-
+        const userId = req.user.admin ? req.user.admin : req.user.id;
         // Fetch the appointment records
         const [rows] = await db.promise().execute(
             `SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif,r.mode,
@@ -171,7 +174,7 @@ exports.allConfirmedRdvs = async (req, res) => {
                 GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.nom, u.prenom, u.email 
                 ORDER BY r.urgency DESC, r.createdAt DESC 
                 LIMIT ${pageSize} OFFSET ${offset}`,
-            [req.user.id, 'confirmed']
+            [userId, 'confirmed']
         );
 
         // Fetch the total count of records
@@ -182,7 +185,7 @@ exports.allConfirmedRdvs = async (req, res) => {
             'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON r.id = d.rdvId ' +
             'WHERE r.providerId = ? AND r.status = ?',
-            [req.user.id, 'confirmed']
+            [userId, 'confirmed']
         );
 
         const totalRecords = countResult[0].totalCount;
@@ -242,7 +245,7 @@ exports.allConfirmedRdvs = async (req, res) => {
 
 exports.patientAllRdvs = async (req, res) => {
     try {
-        const userId = req.user.id; // Current user ID
+        const userId = req.user.admin ? req.user.admin : req.user.id;
 
         const [rdvs] = await db.promise().execute(
             `SELECT 
@@ -653,7 +656,7 @@ exports.deleteRdv = async (req, res) => {
 
 exports.reprogramerRdv = async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.admin ? req.user.admin : req.user.id;
     const { date, from, to } = req.body;
 
     if (!Number(id)) {
@@ -680,8 +683,8 @@ exports.reprogramerRdv = async (req, res) => {
         );
 
 
-        
-       
+
+
         if (dispo.length === 0) {
             return res.status(404).json({
                 message: 'Availability not found for the selected date',
@@ -750,7 +753,7 @@ exports.pricing = async (req, res) => {
 
 exports.checkRdvForToday = async (req, res) => {
     try {
-        const userId = req.user.id; // Current user ID
+        const userId = req.user.admin ? req.user.admin : req.user.id;
         const currentDate = new Date().toISOString().split('T')[0]; // Get today's date in 'YYYY-MM-DD' format
 
         // Query to check if there are any appointments (RDVs) scheduled for today
@@ -802,10 +805,10 @@ exports.checkRdvForToday = async (req, res) => {
 
 
 exports.SignUpAndCreateRdv = async (req, res) => {
-    const user = req.user;
+    const userId = req.user.admin ? req.user.admin : req.user.id;
     const { nom, prenom, birthday, email, phone, location, sexe, type, specialtyId, motif, from, to, date } = req.body;
 
-    if (!nom || !prenom || !birthday || !email  || !phone || !sexe  || !type  || !specialtyId || !motif) {
+    if (!nom || !prenom || !birthday || !email || !phone || !sexe || !type || !specialtyId || !motif) {
         return res.status(400).json({
             message: "All fields are required",
             success: false
@@ -831,7 +834,7 @@ exports.SignUpAndCreateRdv = async (req, res) => {
         const userId = newUser.insertId;
 
         // Verify provider exists
-        const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [user.id]);
+        const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [userId]);
         if (providerExist.length === 0) {
             return res.status(404).json({ message: 'Provider not found', success: false });
         }
@@ -839,7 +842,7 @@ exports.SignUpAndCreateRdv = async (req, res) => {
         // Check availability
         const [dispo] = await db.promise().execute(
             'SELECT * FROM disponibilties WHERE provider_id = ? AND date = ? AND status = 1',
-            [user.id, date]
+            [userId, date]
         );
         if (dispo.length === 0) {
             return res.status(404).json({ message: 'No availability for the selected date', success: false });
@@ -855,7 +858,7 @@ exports.SignUpAndCreateRdv = async (req, res) => {
         const fullname = `${user.nom} ${user.prenom}`;
         const [rdv] = await db.promise().execute(
             'INSERT INTO rdvs (patientName, UserId, mode, providerId, specialty_id, motif, date, appointmentId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [fullname, userId, type, user.id, specialtyId, motif, date, appointment.insertId]
+            [fullname, userId, type, userId, specialtyId, motif, date, appointment.insertId]
         );
 
         // Handle document uploads
@@ -873,11 +876,11 @@ exports.SignUpAndCreateRdv = async (req, res) => {
         // Send notification
         const [notification] = await db.promise().execute(
             'INSERT INTO provider_notifications (providerId, content) VALUES (?, ?)',
-            [user.id, `New RDV for ${fullname} from ${from} to ${to} on ${date}`]
+            [userId, `New RDV for ${fullname} from ${from} to ${to} on ${date}`]
         );
 
         if (notification) {
-            pusher.trigger(`provider-${user.id}-channel`, 'provider-notification', {
+            pusher.trigger(`provider-${userId}-channel`, 'provider-notification', {
                 notification: notification.insertId,
                 userId: userId,
                 content: `New RDV for ${fullname} from ${from} to ${to} on ${date}`
