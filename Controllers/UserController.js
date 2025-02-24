@@ -241,11 +241,12 @@ exports.updateUser = async (req, res) => {
             }
 
             // Save the new logo file
-            const uploadPath = path.join(__dirname, '../assets/logos/', `${Date.now()}_${logoFile.name}`);
+            const logoPath = `logos/${Date.now()}_${logoFile.name}`;
+            const uploadPath = path.join(__dirname, `../assets/${logoPath}`);
             fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
             await logoFile.mv(uploadPath);
 
-            const logoPath = `logos/${Date.now()}_${logoFile.name}`;
+           
 
             await db.promise().execute(
                 'UPDATE users SET logo = ? WHERE id = ?',
