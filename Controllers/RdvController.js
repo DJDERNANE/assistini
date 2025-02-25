@@ -258,6 +258,7 @@ exports.patientAllRdvs = async (req, res) => {
     r.mode, 
     a.date, 
     a.from, 
+    r.providerId,
     a.to,
     s.name AS specialtyName,
     u.nom AS userName, 
@@ -315,7 +316,7 @@ ORDER BY
 
 
 exports.CreateRdv = async (req, res) => {
-    const { patientName, type, specialtyId, motif, from, to, date } = req.body;
+    const { patientName, type, specialtyId, motif, from, to, date, sexe, birthday, phone } = req.body;
     const { providerId } = req.params;
     const Currentuser = req.user;
     const UserId = Currentuser.id;
@@ -366,8 +367,8 @@ exports.CreateRdv = async (req, res) => {
             [dispo[0].id, date, from, to]
         );
         const [result] = await db.promise().execute(
-            'INSERT INTO rdvs (patientName, UserId, mode, providerId, specialty_id, motif, date, appointmentId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [patientName, UserId, type, providerId, specialtyId, motif, date, appointment.insertId]
+            'INSERT INTO rdvs (patientName, UserId, mode, providerId, specialty_id, motif, date, appointmentId, sexe, birthday, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?,?,?)',
+            [patientName, UserId, type, providerId, specialtyId, motif, date, appointment.insertId, sexe, birthday, phone]
         );
 
         // Handle document uploads
