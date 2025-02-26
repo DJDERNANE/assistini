@@ -225,7 +225,7 @@ exports.updateUser = async (req, res) => {
     try {
         const { nom, prenom, birthday, phone, codePostal, sexe, SSNum } = req.body;
         const logoFile = req.files && req.files.logo;
-        
+
         if (logoFile) {
             // Delete the existing logo file if it exists
             const [user] = await db.promise().execute(
@@ -246,7 +246,7 @@ exports.updateUser = async (req, res) => {
             fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
             await logoFile.mv(uploadPath);
 
-           
+
 
             await db.promise().execute(
                 'UPDATE users SET logo = ? WHERE id = ?',
@@ -684,3 +684,111 @@ exports.getUserPartners = async (req, res) => {
         });
     }
 };
+
+
+exports.uploadUserDocs = async (req, res) => {
+    try {
+        // Step 1: Extract parameters and validate input
+        const  userId  = req.user.id;
+
+        // Ensure userId is a string
+     
+
+        const document = req.files && req.files.document;
+        if (!document) {
+            return res.status(400).json({
+                success: false,
+                message: 'No file was uploaded',
+            });
+        }
+
+        const { documentName } = req.body;
+        if (!documentName || typeof documentName !== 'string' || documentName.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                message: 'Document name is required',
+            });
+        }
+
+        // Step 2: Construct file path
+        const fileName = `${Date.now()}_${document.name}`;
+        const filePath = path.join('docs', String(userId), fileName); // Ensure userId is converted to a string
+        const uploadPath = path.join(__dirname, '../assets', filePath);
+
+        // Step 3: Create directory if it doesn't exist
+        fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+
+        // Step 4: Save the uploaded file
+        await document.mv(uploadPath, (err) => {
+            if (err) {
+                // Clean up the created directory if file upload fails
+                fs.rmdirSync(path.dirname(uploadPath), { recursive: true });
+                throw new Error(`Failed to upload file: ${err.message}`);
+            }
+        });
+
+        // Step 5: Insert file details into the database
+        await db.promise().execute(
+            'INSERT INTO user_files (user_id, doc_path, doc_name) VALUES (?, ?, ?)',
+            [userId, filePath, documentName]
+        );
+
+        // Step 6: Return success response
+        return res.status(200).json({
+            success: true,
+            message: 'Document uploaded successfully',
+            data: {
+                doc_path: filePath,
+                doc_name: documentName,
+            },
+        });
+
+    } catch (error) {
+        // Step 7: Handle errors
+        console.error(error); // Log the error for debugging
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while uploading the document',
+            error: error.message,
+        });
+    }
+};
+
+
+exports.getUserFiles = async (req, res) => {
+    try {
+        // Step 1: Extract userId from the request parameters
+        const  userId  = req.user.id;
+
+        console.log(userId);
+    
+        // Step 3: Query the database for user documents
+        const [rows] = await db.promise().execute(
+            'SELECT * FROM user_files WHERE user_id = ?',
+            [userId]
+        );
+
+        // Step 4: Return the result
+        if (rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No documents found for this user',
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Documents retrieved successfully',
+            data: rows,
+        });
+
+    } catch (error) {
+        // Step 5: Handle errors
+        console.error(error); // Log the error for debugging
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while fetching the documents',
+            error: error.message,
+        });
+    }
+}

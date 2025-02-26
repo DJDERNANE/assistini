@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const isAuth = require('../Midlewares/AuthMidleware')
 const {SignUp, Login, allUsers,showUser, updateUser,checkEmail,ResetPassword, confirmEmail, confirmOtpCode,me, blockUser, activateuser,
-    toggleFavorite, listFavorites, getUserPartners
+    toggleFavorite, listFavorites, getUserPartners, uploadUserDocs, getUserFiles
 } = require('../Controllers/UserController');
 
 
@@ -21,4 +21,6 @@ router.put('/activate/:id',  activateuser);
 router.post('/togglefav',isAuth,  toggleFavorite);
 router.get('/fav',isAuth,  listFavorites);
 router.get('/partners/:userId',  getUserPartners);
+router.post('/uploadDocs',isAuth,  uploadUserDocs);
+router.get('/files', isAuth, getUserFiles);
 module.exports  = router;
