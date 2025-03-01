@@ -14,7 +14,7 @@ exports.allRdvs = async (req, res) => {
         const pageSize = parseInt(req.query.pageSize) || 9;
         const offset = (page - 1) * pageSize;
         const userId = req.user.admin ? req.user.admin : req.user.id;
-        
+
         console.log('User ID:', userId);
 
         // Fetch the appointment records
@@ -42,7 +42,7 @@ exports.allRdvs = async (req, res) => {
                 LIMIT ${pageSize} OFFSET ${offset}`,
             [userId, statusRdv]
         );
-      
+
         // Fetch the total count of records
         const [countResult] = await db.promise().execute(
             'SELECT COUNT(DISTINCT r.id) AS totalCount ' +
@@ -147,7 +147,7 @@ exports.watingList = async (req, res) => {
     try {
         const [rows] = await db.promise().execute(
             'SELECT r.id, r.patientName, r.createdAt, r.mode, r.motif, r.date, ' +
-         
+
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.UserId = u.id ' +
@@ -980,7 +980,7 @@ exports.AccessFilesRequest = async (req, res) => {
         const rdvupdate = await db.promise().query(`UPDATE rdvs SET files_access = 2 WHERE id = ? AND providerId = ?`, [rdvId, userId]);
         if (rdvupdate) {
             res.status(200).json({ message: "Request sent successfully", success: true });
-        }else {
+        } else {
             res.status(400).json({ message: "Error sending request", success: false });
         }
     } catch (error) {
@@ -990,12 +990,50 @@ exports.AccessFilesRequest = async (req, res) => {
 
 exports.allAccessFilesRequest = async (req, res) => {
     const userId = req.user.id;
+    const { status } = req.query;
+    console.log(status)
+    let statusKey;
+    switch (status) {
+        case "accepted":
+            statusKey = 1;
+            break;
+        case "refused":
+            statusKey = 3;
+            break;
+        case "pending":
+            statusKey = 2;
+            break;
+        default:
+            statusKey = 0
+    }
 
     try {
-        const [rdvupdate] = await db.promise().query(
-            `SELECT * FROM rdvs WHERE files_access = 2 AND UserId = ?`, 
-            [userId]
-        );
+        let query;
+        let queryParams;
+
+        if (statusKey === 0) {
+            // If statusKey = 0, get all files_access values (1, 2, 3)
+            query = `
+                SELECT r.*, 
+                    p.cabinName, p.id AS providerId, p.fullName AS providerName 
+                FROM rdvs r
+                JOIN providers p ON r.providerId = p.id
+                WHERE (r.files_access IN (1, 2, 3)) AND r.UserId = ?
+            `;
+            queryParams = [userId];
+        } else {
+            // Otherwise, filter by the specific statusKey
+            query = `
+                SELECT r.*, 
+                    p.cabinName, p.id AS providerId, p.fullName AS providerName 
+                FROM rdvs r
+                JOIN providers p ON r.providerId = p.id
+                WHERE r.files_access = ? AND r.UserId = ?
+            `;
+            queryParams = [statusKey, userId];
+        }
+
+        const [rdvupdate] = await db.promise().query(query, queryParams);
 
         if (rdvupdate.length > 0) {
             return res.status(200).json({ requests: rdvupdate, success: true });
@@ -1008,34 +1046,44 @@ exports.allAccessFilesRequest = async (req, res) => {
     }
 };
 
+
+
+
 exports.AccepetAccessFilesRequest = async (req, res) => {
-    const userId =  req.user.id;
-    const {id} = req.params;
+    const userId = req.user.id;
+    const { id } = req.params;
     try {
         const rdvupdate = await db.promise().query(`UPDATE rdvs SET files_access = 1 WHERE id = ? AND UserId = ?`, [id, userId]);
         if (rdvupdate) {
             res.status(200).json({ message: "files shared with doctor", success: true });
-        }else {
-            res.status(400).json({ message: "Error sending request", success: false });
-        }
-    } catch (error) {
-        console.error(error);
-    }   
-};
-
-exports.DenyAccessFilesRequest = async () => {
-    const userId = req.user.admin ? req.user.admin : req.user.id;
-    const rdvId = req.body.rdvId;
-    try {
-        const rdvupdate = await db.promise().query(`UPDATE rdvs SET files_access = 0 WHERE id = ? AND UserId = ?`, [rdvId, userId]);
-        if (rdvupdate) {
-            res.status(200).json({ message: "files shared with doctor", success: true });
-        }else {
+        } else {
             res.status(400).json({ message: "Error sending request", success: false });
         }
     } catch (error) {
         console.error(error);
     }
 };
+
+exports.RefuseAccessFilesRequest = async (req, res) => {
+    const userId = req.user.id;
+    const { rdvId } = req.params;
+
+    try {
+        const [rdvupdate] = await db.promise().query(
+            `UPDATE rdvs SET files_access = 3 WHERE id = ? AND UserId = ?`, 
+            [rdvId, userId]
+        );
+
+        if (rdvupdate.affectedRows > 0) {
+            return res.status(200).json({ message: "Files not shared with doctor", success: true });
+        } else {
+            return res.status(400).json({ message: "No matching record found or update failed", success: false });
+        }
+    } catch (error) {
+        console.error("Database error:", error);
+        return res.status(500).json({ message: "Internal server error", success: false, error: error.message });
+    }
+};
+
 
 
