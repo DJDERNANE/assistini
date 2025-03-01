@@ -14,21 +14,28 @@ exports.allRdvs = async (req, res) => {
         const pageSize = parseInt(req.query.pageSize) || 9;
         const offset = (page - 1) * pageSize;
         const userId = req.user.admin ? req.user.admin : req.user.id;
+        
         console.log('User ID:', userId);
+
         // Fetch the appointment records
         const [rows] = await db.promise().execute(
-            `SELECT COUNT(DISTINCT r.id) AS totalCount, r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif,r.mode,
+            `SELECT r.id, r.status, r.patientName, r.createdAt, p.cabinName, r.motif, r.mode, r.files_access,
                 u.nom, u.prenom AS userName, u.email AS userEmail, u.birthday AS userBirthday, u.sexe, u.phone, u.address, 
                 app.id AS appointmentId, app.date AS appointmentDate, app.from AS appointmentFrom, app.to AS appointmentTo,
                 GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, 
                 GROUP_CONCAT(d.created_at ORDER BY d.id) AS documentCreatedAts, 
                 GROUP_CONCAT(d.name ORDER BY d.id) AS documentNames, 
-                GROUP_CONCAT(d.documents ORDER BY d.id) AS documentPaths
+                GROUP_CONCAT(d.documents ORDER BY d.id) AS documentPaths,
+                GROUP_CONCAT(uf.id ORDER BY uf.id) AS userFileIds,
+                GROUP_CONCAT(uf.created_at ORDER BY uf.id) AS userFileCreatedAts,
+                GROUP_CONCAT(uf.doc_name ORDER BY uf.id) AS userFileNames,
+                GROUP_CONCAT(uf.doc_path ORDER BY uf.id) AS userFilePaths
                 FROM rdvs r 
                 JOIN providers p ON r.providerId = p.id 
                 JOIN apointments app ON r.appointmentId = app.id
                 JOIN users u ON r.UserId = u.id 
                 LEFT JOIN documents d ON r.id = d.rdvId 
+                LEFT JOIN user_files uf ON r.files_access = 1 AND u.id = uf.user_id
                 WHERE r.providerId = ? AND r.status = ? 
                 GROUP BY r.id, r.status, r.patientName, r.createdAt, p.cabinName, u.nom, u.prenom, u.email 
                 ORDER BY r.urgency DESC, r.createdAt DESC 
@@ -43,14 +50,16 @@ exports.allRdvs = async (req, res) => {
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.UserId = u.id ' +
             'LEFT JOIN documents d ON r.id = d.rdvId ' +
+            'LEFT JOIN user_files uf ON r.files_access = 1 AND u.id = uf.user_id ' +
             'WHERE r.providerId = ? AND r.status = ?',
             [userId, statusRdv]
         );
 
         const totalRecords = countResult[0].totalCount;
 
-        // Process the results to format documents and appointment details correctly
+        // Process the results to format documents and patient files
         const formattedRdvs = rows.map(rdv => {
+            // Documents
             const documentIds = rdv.documentIds ? rdv.documentIds.split(',') : [];
             const documentNames = rdv.documentNames ? rdv.documentNames.split(',') : [];
             const documentPaths = rdv.documentPaths ? rdv.documentPaths.split(',') : [];
@@ -63,7 +72,23 @@ exports.allRdvs = async (req, res) => {
                 createdAt: documentCreatedAts[index] || ''
             }));
 
-            // Include appointment details in the response
+            // Patient Files (Only if access_files = 1)
+            let userFiles = [];
+            if (rdv.access_files == 1) {
+                const userFileIds = rdv.userFileIds ? rdv.userFileIds.split(',') : [];
+                const userFileNames = rdv.userFileNames ? rdv.userFileNames.split(',') : [];
+                const userFilePaths = rdv.userFilePaths ? rdv.userFilePaths.split(',') : [];
+                const userFileCreatedAts = rdv.userFileCreatedAts ? rdv.userFileCreatedAts.split(',') : [];
+
+                userFiles = userFileIds.map((id, index) => ({
+                    id: id,
+                    name: userFileNames[index] || '',
+                    path: userFilePaths[index] || '',
+                    createdAt: userFileCreatedAts[index] || ''
+                }));
+            }
+
+            // Appointment details
             const appointmentDetails = {
                 id: rdv.appointmentId,
                 date: rdv.appointmentDate,
@@ -72,9 +97,24 @@ exports.allRdvs = async (req, res) => {
             };
 
             return {
-                ...rdv,
+                id: rdv.id,
+                status: rdv.status,
+                patientName: rdv.patientName,
+                createdAt: rdv.createdAt,
+                cabinName: rdv.cabinName,
+                motif: rdv.motif,
+                mode: rdv.mode,
+                nom: rdv.nom,
+                userName: rdv.userName,
+                userEmail: rdv.userEmail,
+                userBirthday: rdv.userBirthday,
+                sexe: rdv.sexe,
+                phone: rdv.phone,
+                address: rdv.address,
+                accessFiles: rdv.access_files == 1, // Boolean for frontend
+                appointmentDetails: appointmentDetails,
                 documents: documents,
-                appointmentDetails: appointmentDetails
+                patientFiles: userFiles // Includes patient files only if access_files is 1
             };
         });
 
@@ -93,12 +133,13 @@ exports.allRdvs = async (req, res) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error fetching confirmed Rdvs',
+            message: 'Error fetching Rdvs',
             error: error.message,
             status: 500
         });
     }
 };
+
 
 exports.watingList = async (req, res) => {
     const userId = req.user.admin ? req.user.admin : req.user.id;
@@ -106,8 +147,7 @@ exports.watingList = async (req, res) => {
     try {
         const [rows] = await db.promise().execute(
             'SELECT r.id, r.patientName, r.createdAt, r.mode, r.motif, r.date, ' +
-            'GROUP_CONCAT(d.id ORDER BY d.id) AS documentIds, ' +
-            'GROUP_CONCAT(d.documents ORDER BY d.id) AS documentFilePaths ' +
+         
             'FROM rdvs r ' +
             'JOIN providers p ON r.providerId = p.id ' +
             'JOIN users u ON r.UserId = u.id ' +
@@ -146,6 +186,7 @@ exports.watingList = async (req, res) => {
         });
     }
 };
+
 
 
 
@@ -321,7 +362,7 @@ exports.CreateRdv = async (req, res) => {
     const Currentuser = req.user;
     const UserId = Currentuser.id;
 
-    if (!patientName || !type || !Number(UserId) || !Number(providerId) || !specialtyId || !motif) {
+    if (!patientName || !type || !specialtyId || !motif || !date || !from || !to || !UserId || !providerId) {
         return res.status(400).json({
             message: 'All fields are required',
             success: false,
@@ -329,18 +370,24 @@ exports.CreateRdv = async (req, res) => {
         });
     }
 
+    const connection = await db.promise().getConnection(); // Get transaction connection
     try {
+        await connection.beginTransaction(); // Start transaction
+
         // Verify user and provider existence
-        const [userExist] = await db.promise().execute('SELECT * FROM users WHERE id = ?', [UserId]);
-        const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [providerId]);
-        if (userExist.length === 0) {
+        const [[userExist]] = await connection.query('SELECT id FROM users WHERE id = ?', [UserId]);
+        if (!userExist) {
+            await connection.rollback();
             return res.status(404).json({
                 message: 'User not found',
                 success: false,
                 status: 404
             });
         }
-        if (providerExist.length === 0) {
+
+        const [[providerExist]] = await connection.query('SELECT id FROM providers WHERE id = ?', [providerId]);
+        if (!providerExist) {
+            await connection.rollback();
             return res.status(404).json({
                 message: 'Provider not found',
                 success: false,
@@ -349,11 +396,12 @@ exports.CreateRdv = async (req, res) => {
         }
 
         // Verify availability
-        const [dispo] = await db.promise().execute(
-            'SELECT * FROM disponibilties WHERE provider_id = ? AND date = ? AND status = 1',
+        const [[dispo]] = await connection.query(
+            'SELECT id FROM disponibilties WHERE provider_id = ? AND date = ? AND status = 1',
             [providerId, date]
         );
-        if (dispo.length === 0) {
+        if (!dispo) {
+            await connection.rollback();
             return res.status(404).json({
                 message: 'Availability not found for the selected date',
                 success: false,
@@ -361,59 +409,63 @@ exports.CreateRdv = async (req, res) => {
             });
         }
 
-        // Create appointment and Rdv
-        const [appointment] = await db.promise().execute(
+        // Create appointment
+        const [appointment] = await connection.query(
             'INSERT INTO apointments (dispo_id, date, `from`, `to`) VALUES (?, ?, ?, ?)',
-            [dispo[0].id, date, from, to]
+            [dispo.id, date, from, to]
         );
-        const [result] = await db.promise().execute(
-            'INSERT INTO rdvs (patientName, UserId, mode, providerId, specialty_id, motif, date, appointmentId, sexe, birthday, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?,?,?)',
+
+        // Create Rdv
+        const [rdv] = await connection.query(
+            'INSERT INTO rdvs (patientName, UserId, mode, providerId, specialty_id, motif, date, appointmentId, sexe, birthday, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [patientName, UserId, type, providerId, specialtyId, motif, date, appointment.insertId, sexe, birthday, phone]
         );
 
         // Handle document uploads
-        let Paths = [];
-        const documents = req.files && req.files.documents;
+        const documents = req.files?.documents;
         if (documents) {
             const files = Array.isArray(documents) ? documents : [documents];
-            for (let file of files) {
-                const uploadPath = path.join(__dirname, '../assets/docs/', `${Date.now()}_${file.name}`);
-                fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
-                await file.mv(uploadPath);
-                const ImgPath = `docs/${Date.now()}_${file.name}`;
 
-                await db.promise().execute(
+            for (let file of files) {
+                const timestamp = Date.now();
+                const fileName = `${timestamp}_${file.name}`;
+                const uploadPath = path.join(__dirname, '../assets/docs/', fileName);
+                await fs.promises.mkdir(path.dirname(uploadPath), { recursive: true });
+                await file.mv(uploadPath);
+
+                await connection.query(
                     'INSERT INTO documents (documents, rdvId, name) VALUES (?, ?, ?)',
-                    [ImgPath, result.insertId, file.name]
+                    [`docs/${fileName}`, rdv.insertId, file.name]
                 );
             }
         }
 
-
         // Create notification
-        const [notification] = await db.promise().execute(
-            `INSERT INTO provider_notifications (providerId, content) VALUES (?, "you have a new rdv for : ${patientName}  from ${from} to ${to} on ${date}")`,
-            [providerId]
+        const [notification] = await connection.query(
+            `INSERT INTO provider_notifications (providerId, content) VALUES (?, ?)`,
+            [providerId, `You have a new rdv for: ${patientName} from ${from} to ${to} on ${date}`]
         );
 
-        // send notification using pusher
-        if (notification) {
+        // Send notification using Pusher
+        if (notification.insertId) {
             pusher.trigger(`provider-${providerId}-channel`, 'provider-notification', {
                 notification: notification.insertId,
                 providerId: providerId,
-                content: `you have a new rdv for : ${patientName}  from ${from} to ${to} on ${date}`
+                content: `You have a new rdv for: ${patientName} from ${from} to ${to} on ${date}`
             });
         }
 
+        await connection.commit(); // Commit transaction
 
-        res.status(200).json({
-            message: 'Rdv created',
+        res.status(201).json({
+            message: 'Rdv created successfully',
             success: true,
-            status: 200
+            status: 201
         });
 
     } catch (error) {
-        console.error('Error Details:', error);
+        await connection.rollback(); // Rollback transaction in case of error
+        console.error('Error:', error);
 
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(409).json({
@@ -429,6 +481,9 @@ exports.CreateRdv = async (req, res) => {
             success: false,
             status: 500
         });
+
+    } finally {
+        connection.release(); // Release connection back to the pool
     }
 };
 
@@ -912,6 +967,72 @@ exports.RdvTimeOver = async () => {
         );
 
         connection.release(); // Release the connection
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+
+exports.AccessFilesRequest = async (req, res) => {
+    const userId = req.user.admin ? req.user.admin : req.user.id;
+    const rdvId = req.body.rdvId;
+    try {
+        const rdvupdate = await db.promise().query(`UPDATE rdvs SET files_access = 2 WHERE id = ? AND providerId = ?`, [rdvId, userId]);
+        if (rdvupdate) {
+            res.status(200).json({ message: "Request sent successfully", success: true });
+        }else {
+            res.status(400).json({ message: "Error sending request", success: false });
+        }
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+exports.allAccessFilesRequest = async (req, res) => {
+    const userId = req.user.id;
+
+    try {
+        const [rdvupdate] = await db.promise().query(
+            `SELECT * FROM rdvs WHERE files_access = 2 AND UserId = ?`, 
+            [userId]
+        );
+
+        if (rdvupdate.length > 0) {
+            return res.status(200).json({ requests: rdvupdate, success: true });
+        } else {
+            return res.status(404).json({ message: "No access requests found", success: false });
+        }
+    } catch (error) {
+        console.error("Database error:", error);
+        return res.status(500).json({ message: "Internal server error", success: false, error: error.message });
+    }
+};
+
+exports.AccepetAccessFilesRequest = async (req, res) => {
+    const userId =  req.user.id;
+    const {id} = req.params;
+    try {
+        const rdvupdate = await db.promise().query(`UPDATE rdvs SET files_access = 1 WHERE id = ? AND UserId = ?`, [id, userId]);
+        if (rdvupdate) {
+            res.status(200).json({ message: "files shared with doctor", success: true });
+        }else {
+            res.status(400).json({ message: "Error sending request", success: false });
+        }
+    } catch (error) {
+        console.error(error);
+    }   
+};
+
+exports.DenyAccessFilesRequest = async () => {
+    const userId = req.user.admin ? req.user.admin : req.user.id;
+    const rdvId = req.body.rdvId;
+    try {
+        const rdvupdate = await db.promise().query(`UPDATE rdvs SET files_access = 0 WHERE id = ? AND UserId = ?`, [rdvId, userId]);
+        if (rdvupdate) {
+            res.status(200).json({ message: "files shared with doctor", success: true });
+        }else {
+            res.status(400).json({ message: "Error sending request", success: false });
+        }
     } catch (error) {
         console.error(error);
     }

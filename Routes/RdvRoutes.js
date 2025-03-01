@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const {CreateRdv,allRdvs, confirmRdv, cancelRdv, deleteRdv, closeRdv, patientAllRdvs, allConfirmedRdvs, pricing, checkRdvForToday, reprogramerRdv, SignUpAndCreateRdv} = require('../Controllers/RdvController');
+const {CreateRdv,allRdvs, confirmRdv, AccepetAccessFilesRequest,cancelRdv, deleteRdv, closeRdv, patientAllRdvs, allConfirmedRdvs, pricing, checkRdvForToday, reprogramerRdv, SignUpAndCreateRdv, AccessFilesRequest, allAccessFilesRequest} = require('../Controllers/RdvController');
+const isAuth = require('../Midlewares/AuthMidleware');
 
 router.get('/today', checkRdvForToday);
 router.get('/waitinglist', allRdvs);
@@ -13,7 +14,8 @@ router.put('/cancel/:id', cancelRdv);
 router.put('/close/:id', closeRdv);
 router.delete('/:id', deleteRdv);
 router.post('/pricing/:id', pricing);
-
-
+router.post('/accessfiles', isAuth, AccessFilesRequest);
+router.get('/accessfiles', isAuth, allAccessFilesRequest);
+router.put('/accessfiles/accept/:id', isAuth, AccepetAccessFilesRequest);
 
 module.exports = router
