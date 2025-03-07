@@ -74,7 +74,7 @@ exports.allRdvs = async (req, res) => {
 
             // Patient Files (Only if access_files = 1)
             let userFiles = [];
-            if (rdv.access_files == 1) {
+            if (rdv.files_access == 1) {
                 const userFileIds = rdv.userFileIds ? rdv.userFileIds.split(',') : [];
                 const userFileNames = rdv.userFileNames ? rdv.userFileNames.split(',') : [];
                 const userFilePaths = rdv.userFilePaths ? rdv.userFilePaths.split(',') : [];
@@ -111,7 +111,7 @@ exports.allRdvs = async (req, res) => {
                 sexe: rdv.sexe,
                 phone: rdv.phone,
                 address: rdv.address,
-                accessFiles: rdv.access_files == 1, // Boolean for frontend
+                accessFiles: rdv.files_access,
                 appointmentDetails: appointmentDetails,
                 documents: documents,
                 patientFiles: userFiles // Includes patient files only if access_files is 1
