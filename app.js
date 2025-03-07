@@ -52,6 +52,7 @@ const MessagesRoutes = require('./Routes/MessageRoutes');
 const MyPatientRoutes = require('./Routes/MypatientRoutes');
 const DashboardRoutes = require('./Routes/DashboardRoutes');
 const { RdvTimeOver } = require('./Controllers/RdvController');
+const { notPaidInvoices } = require('./Controllers/InvoiceController');
 const isAuth = require('./Midlewares/AuthMidleware');
 
 const { sendMessage, loadMessages } = require('./Controllers/MessageController')
@@ -90,6 +91,7 @@ app.post('/testpusher', (req, res) => {
 
 cron.schedule('0 0 * * *', () => { // Runs every day
     RdvTimeOver();
+    notPaidInvoices();
     console.log("Cron job executed");
 });
 
