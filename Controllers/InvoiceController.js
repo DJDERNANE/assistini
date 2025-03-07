@@ -82,7 +82,7 @@ exports.create = async (req, res) => {
     let services = []; // Declare services variable here
     
     try {
-
+        const rdv = await db.promise().execute('SELECT * FROM rdvs WHERE id = ?', [rdvId]);
         db.query('INSERT INTO rapports (rdvId, result, conclusion) VALUES (?, ?, ?)', [rdvId, result, conclusion], (err, result) => {
             if (err) {
                 console.log(err);
@@ -143,7 +143,7 @@ exports.create = async (req, res) => {
                     invoice_id: invoiceResult.insertId,
                 };
 
-                const partnerPDFPath = await generateInvoicePDF(partnerInvoiceData, 'partner', invoiceResult.insertId);
+                const partnerPDFPath = await generateInvoicePDF(partnerInvoiceData, 'partner', invoiceResult.insertId, rdv[0].UserId);
 
                 // Insert into partner payments with PDF path
                 await db.promise().execute(
@@ -152,7 +152,7 @@ exports.create = async (req, res) => {
                 );
 
                 // Generate PDF for patient
-                const patientPDFPath = await generateInvoicePDF(partnerInvoiceData, 'patient', invoiceResult.insertId);
+                const patientPDFPath = await generateInvoicePDF(partnerInvoiceData, 'patient', invoiceResult.insertId, rdv[0].UserId);
 
                 // Insert into user payments with PDF path
                 await db.promise().execute(
@@ -205,7 +205,7 @@ exports.create = async (req, res) => {
                 invoice_id: invoiceResult.insertId,
             };
 
-            const patientPDFPath = await generateInvoicePDF(patientInvoiceData, 'patient', invoiceResult.insertId);
+            const patientPDFPath = await generateInvoicePDF(patientInvoiceData, 'patient', invoiceResult.insertId, rdv[0].UserId);
 
             // Insert into user payments with PDF path
             await db.promise().execute(
@@ -475,10 +475,10 @@ exports.getInvoiceById = async (req, res) => {
 // };
 
 
-const generateInvoicePDF = async (invoiceData, recipient, id) => {
+const generateInvoicePDF = async (invoiceData, recipient, id, userId) => {
     try {
         // Ensure outputDir is defined and exists
-        const outputDir = path.join(__dirname, '../assets/invoices'); // Define outputDir path here if not defined globally
+        const outputDir = path.join(__dirname, `../assets/invoices/${userId}`); // Define outputDir path here if not defined globally
         if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
         // Set paths for PDF storage and file path
@@ -808,3 +808,98 @@ exports.payInvoice = async (req, res) => {
     }
 };
 
+
+exports.patientInvoices = async (req, res) => {
+    const user = req.user;
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 6;
+    const offset = (page - 1) * pageSize;
+    const status = req.query.status;
+    
+    try {
+        // Updated query to include pageSize and offset directly
+        let query = `
+        SELECT 
+            i.*, 
+            u.nom AS patient, 
+            p.fullName AS provider
+        FROM 
+            invoices i
+        JOIN 
+            rdvs r ON i.rdv_id = r.id
+        JOIN 
+            users u ON r.userId = u.id
+        JOIN 
+            providers p ON r.providerId = p.id
+        WHERE 
+            r.userId = ?
+      
+        `;
+
+
+        let params = [user.id];
+        if (status) {
+            query += ` AND i.payment_status = ?`;
+            params.push(status);
+        }
+
+        query += `
+        ORDER BY 
+            i.created_at DESC
+        LIMIT ${pageSize} OFFSET ${offset}
+        `;
+
+        const [invoices] = await db.promise().execute(query, params);
+
+        let countQuery = `SELECT COUNT(*) AS total FROM invoices WHERE rdv_id IN (SELECT id FROM rdvs WHERE userId = ?)`;
+        let countParams = [user.id];
+
+        if (status) {
+            countQuery += ` AND payment_status = ?`;
+            countParams.push(status);
+        }
+
+        const [total] = await db.promise().execute(countQuery, countParams);
+
+        res.json({
+            success: true,
+            message: 'Invoices fetched successfully',
+            data: {
+                invoices,
+                total: total[0].total,
+                page,
+                pageSize,
+                hasMore: invoices.length === pageSize
+            },
+            status: 200
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching invoices',
+            status: 500
+        });
+    }
+};
+
+exports.notPaidInvoices = async () => {
+    try {
+        const connection = await db.promise().getConnection(); // Get a connection
+
+        // Set the time zone
+        await connection.query(`SET time_zone = '+01:00';`);
+
+        // Execute the update query
+        const [rdvs] = await connection.execute(
+            `UPDATE invoices 
+             SET payment_status = 'not_paid'
+             WHERE created_at < CURDATE() 
+             AND (payment_status = 'pending');`
+        );
+
+        connection.release(); // Release the connection
+    } catch (error) {
+        console.error(error);
+    }
+};
