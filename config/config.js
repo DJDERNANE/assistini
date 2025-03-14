@@ -9,7 +9,8 @@ const db = mysql.createPool({
     user: 'root',
     password: '',
     database: 'assistini',
-    dialect: "mysql"
+    dialect: "mysql",
+    timezone: "local" 
 
 })
 
