@@ -861,7 +861,7 @@ exports.checkRdvForToday = async (req, res) => {
 
 
 exports.SignUpAndCreateRdv = async (req, res) => {
-    const userId = req.user.admin ? req.user.admin : req.user.id;
+    const providerId = req.user.admin ? req.user.admin : req.user.id;
     const { nom, prenom, birthday, email, phone, location, sexe, type, specialtyId, motif, from, to, date } = req.body;
 
     if (!nom || !prenom || !birthday || !email || !phone || !sexe || !type || !specialtyId || !motif) {
@@ -890,7 +890,7 @@ exports.SignUpAndCreateRdv = async (req, res) => {
         const userId = newUser.insertId;
 
         // Verify provider exists
-        const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [userId]);
+        const [providerExist] = await db.promise().execute('SELECT * FROM providers WHERE id = ?', [providerId]);
         if (providerExist.length === 0) {
             return res.status(404).json({ message: 'Provider not found', success: false });
         }
